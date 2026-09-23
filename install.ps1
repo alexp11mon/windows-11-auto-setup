@@ -32,13 +32,24 @@ if (-not $isAdmin) {
     exit 1
 }
 
-# 2. Comprobación de Windows 11 de 64 bits (SO, no solo CPU)
+# 2. Comprobación de Windows 11 de 64 bits (SO, no solo CPU).
+# Nota: Win32_OperatingSystem.OSArchitecture viene localizado según el idioma
+# de Windows ("64-bit" en inglés, "64 bits" en español...). Por eso la
+# comparación es independiente del idioma vía -match '64', con
+# [Environment]::Is64BitOperatingSystem como condición principal.
 $os = Get-CimInstance Win32_OperatingSystem
-$isWin11 = [int]$os.BuildNumber -ge 22000
-$is64BitOS = [Environment]::Is64BitOperatingSystem -and ($os.OSArchitecture -eq "64-bit")
+if ($null -eq $os) {
+    Write-Error "No se pudo consultar la informacion del sistema operativo. Ejecuta este script en PowerShell 7 como Administrador."
+    exit 1
+}
+$detectedBuild = [int]$os.BuildNumber
+$detectedArch = [string]$os.OSArchitecture
+$is64BitEnv = [Environment]::Is64BitOperatingSystem
+$isWin11 = $detectedBuild -ge 22000
+$is64BitOS = $is64BitEnv -and ($detectedArch -match '64')
 
 if (-not ($isWin11 -and $is64BitOS)) {
-    Write-Error "Este script esta disenado exclusivamente para Windows 11 de 64 bits (Build >= 22000, SO 64-bit). Ejecucion abortada."
+    Write-Error "Este script esta disenado exclusivamente para Windows 11 de 64 bits (Build >= 22000, SO 64-bit). Detectado: Build=$detectedBuild, Arquitectura='$detectedArch', SO64bit=$is64BitEnv. Ejecucion abortada."
     exit 1
 }
 
