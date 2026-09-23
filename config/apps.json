@@ -1,0 +1,22 @@
+{
+  "Base": [
+    "Brave.Brave",
+    "RARLab.WinRAR",
+    "RevoUninstaller.RevoUninstaller",
+    "AntibodySoftware.WizTree"
+  ],
+  "Dev": [
+    "Microsoft.VisualStudioCode",
+    "Git.Git",
+    "Axosoft.GitKraken",
+    "Obsidian.Obsidian",
+    "Microsoft.PowerShell",
+    "Microsoft.WindowsTerminal",
+    "Warp.Warp"
+  ],
+  "Gaming": [
+    "Valve.Steam",
+    "EpicGames.EpicGamesLauncher",
+    "PrismLauncher.PrismLauncher"
+  ]
+}

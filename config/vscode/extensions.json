@@ -1,0 +1,15 @@
+{
+  "extensions": [
+    "ms-vscode.cpptools",
+    "ms-vscode.cpptools-extension-pack",
+    "ms-vscode.cmake-tools",
+    "sidthesloth.html5-boilerplate",
+    "ecmel.vscode-html-css",
+    "yzhang.markdown-all-in-one",
+    "ms-vscode.powershell",
+    "ms-python.vscode-pylance",
+    "ms-python.python",
+    "ms-python.debugpy",
+    "ms-python.python-envs"
+  ]
+}
