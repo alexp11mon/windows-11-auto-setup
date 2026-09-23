@@ -110,7 +110,3 @@ Notas:
 ## Créditos
 
 Los tests de este proyecto (`tests/`) se crearon con IA, específicamente con OpenCode usando el agente gratuito Muse Spark 1.3.
-
-## Pendiente
-
-- Hacer merge de `feature/online-install` a `master` y actualizar el enlace de descarga.
