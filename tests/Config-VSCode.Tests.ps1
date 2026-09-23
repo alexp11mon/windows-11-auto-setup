@@ -32,4 +32,9 @@ Describe 'Config-VSCode' {
         Invoke-VSCodeConfig -ExtensionsConfigPath 'noexiste.json'
         Should -Invoke Write-InstallLog -ParameterFilter { $Level -eq 'ERROR' }
     }
+    It 'extensions.json usa el ID nuevo de Python Envs' {
+        $data = Get-Content $script:ExtPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $data.extensions | Should -Contain 'ms-python.vscode-python-envs'
+        $data.extensions | Should -Not -Contain 'ms-python.python-envs'
+    }
 }

@@ -1,10 +1,14 @@
 # Instalador automático Windows 11 64-bit.
-# Uso: .\install.ps1 [-Category Base|Dev|Gaming|All] [-WhatIf]
+# Uso: .\install.ps1 [-Category Base|Dev|Gaming|All] [-WhatIf] [-GitUserName "Nombre"] [-GitUserEmail "email@ejemplo.com"]
 # Requiere: Windows 11 64-bit, PowerShell 7, winget, ejecución como Administrador.
 [CmdletBinding(SupportsShouldProcess = $true)]
 param (
     [ValidateSet('Base', 'Dev', 'Gaming', 'All')]
-    [string]$Category = 'All'
+    [string]$Category = 'All',
+
+    [string]$GitUserName = "",
+
+    [string]$GitUserEmail = ""
 )
 
 $RepoRoot = $PSScriptRoot
@@ -13,12 +17,26 @@ $ExtensionsConfigPath = Join-Path -Path $RepoRoot -ChildPath "config/vscode/exte
 
 function Update-SessionPath {
     # Tras instalar apps con winget en la misma sesión, el PATH del proceso
-    # no incluye las nuevas rutas (git, code). Refrescar desde Machine + User.
+    # no incluye las nuevas rutas (git, code). Refrescar combinando:
+    # PATH actual del proceso + Machine + User, sin duplicados.
+    # Asi no se pierden entradas solo-proceso.
     try {
         $machine = [Environment]::GetEnvironmentVariable("Path", "Machine")
         $user = [Environment]::GetEnvironmentVariable("Path", "User")
-        if ($machine -or $user) {
-            $env:Path = "$machine;$user"
+        $current = $env:Path
+        $combined = @()
+        foreach ($part in @($current, $machine, $user)) {
+            if ([string]::IsNullOrWhiteSpace($part)) { continue }
+            foreach ($entry in ($part -split ';')) {
+                $trimmed = $entry.Trim()
+                if ([string]::IsNullOrWhiteSpace($trimmed)) { continue }
+                if ($combined -inotcontains $trimmed) {
+                    $combined += $trimmed
+                }
+            }
+        }
+        if ($combined.Count -gt 0) {
+            $env:Path = $combined -join ';'
         }
     } catch {
         Write-Warning "No se pudo refrescar el PATH de la sesion: $_"
@@ -69,6 +87,7 @@ if (Test-Path $CommonModulePath) {
 }
 
 # 5. Iniciar registro de actividad (archivo fechado en logs/)
+$global:InstallHadErrors = $false
 Initialize-InstallLog | Out-Null
 Write-InstallLog -Message "Iniciando instalador automatico. Categoria seleccionada: $Category" -Level "INFO"
 
@@ -93,7 +112,7 @@ if (Test-Path $GitModulePath) {
     . $GitModulePath
 
     if ($Category -eq 'Dev' -or $Category -eq 'All') {
-        Invoke-GitConfig
+        Invoke-GitConfig -UserName $GitUserName -UserEmail $GitUserEmail
     }
 } else {
     Write-InstallLog -Message "Modulo de configuracion de Git no encontrado en: $GitModulePath" -Level "WARNING"
@@ -113,4 +132,8 @@ if (Test-Path $VSCodeModulePath) {
 
 # 10. Cierre
 Write-InstallLog -Message "Ejecucion del instalador finalizada." -Level "INFO"
+if ($global:InstallHadErrors) {
+    Write-Host "Proceso completado con errores. Revisa la carpeta logs/ para mas detalles." -ForegroundColor Red
+    exit 1
+}
 Write-Host "Proceso completado. Revisa la carpeta logs/ para mas detalles." -ForegroundColor Green

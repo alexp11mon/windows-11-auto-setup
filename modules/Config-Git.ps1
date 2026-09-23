@@ -11,7 +11,13 @@ function Invoke-GitConfig {
         return
     }
 
-    # 2. Solicitar datos personales interactivos con validación básica.
+    # 2. En modo simulacion sin datos, no preguntar (evita bloqueo en -WhatIf/automatizacion).
+    if ($WhatIfPreference -and ([string]::IsNullOrWhiteSpace($UserName) -or [string]::IsNullOrWhiteSpace($UserEmail))) {
+        Write-InstallLog -Message "Modo simulacion activado. Se configuraria Git (sin datos interactivos)." -Level "INFO"
+        return
+    }
+
+    # 3. Solicitar datos personales interactivos con validación básica.
     if ([string]::IsNullOrWhiteSpace($UserName)) {
         $UserName = Read-Host "Por favor, introduce tu nombre de usuario para Git"
     }
@@ -28,7 +34,7 @@ function Invoke-GitConfig {
         return
     }
 
-    # 3. Soporte WhatIf y aplicación de configuración.
+    # 4. Soporte WhatIf y aplicación de configuración.
     if ($PSCmdlet.ShouldProcess("Configuracion global de Git", "Aplicar alias y credenciales para $UserName")) {
         Write-InstallLog -Message "Aplicando configuracion base de Git para $UserName..." -Level "INFO"
 

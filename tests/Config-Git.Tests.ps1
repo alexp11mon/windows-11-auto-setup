@@ -8,14 +8,14 @@ Describe 'Config-Git' {
     It 'Omite con WARNING si git no esta en PATH' {
         Mock Get-Command { $null } -ParameterFilter { $Name -eq 'git' }
         Mock Write-InstallLog { }
-        { Invoke-GitConfig -UserName 'A' -UserEmail 'a@b.com' } | Should -Not -Throw
+        { Invoke-GitConfig -UserName 'Test' -UserEmail 'test@example.com' } | Should -Not -Throw
         Should -Invoke Write-InstallLog -ParameterFilter { $Level -eq 'WARNING' }
     }
     It 'Rechaza email invalido sin ejecutar git' {
         Mock Get-Command { @{ Name = 'git' } } -ParameterFilter { $Name -eq 'git' }
         Mock git { throw 'no debe ejecutarse' }
         Mock Write-InstallLog { }
-        Invoke-GitConfig -UserName 'A' -UserEmail 'no-es-email'
+        Invoke-GitConfig -UserName 'Test' -UserEmail 'no-es-email'
         Should -Invoke Write-InstallLog -ParameterFilter { $Level -eq 'WARNING' }
     }
     It 'Aplica user.name, user.email, defaultBranch y alias tree' {
@@ -27,6 +27,14 @@ Describe 'Config-Git' {
     It '-WhatIf no ejecuta git' {
         Mock Get-Command { @{ Name = 'git' } } -ParameterFilter { $Name -eq 'git' }
         Mock git { throw 'no debe ejecutarse en WhatIf' }
-        Invoke-GitConfig -UserName 'A' -UserEmail 'a@b.com' -WhatIf
+        Invoke-GitConfig -UserName 'Test' -UserEmail 'test@example.com' -WhatIf
+    }
+    It '-WhatIf sin params no pide Read-Host ni bloquea' {
+        Mock Get-Command { @{ Name = 'git' } } -ParameterFilter { $Name -eq 'git' }
+        Mock Read-Host { throw 'no debe preguntar en WhatIf' }
+        Mock git { throw 'no debe ejecutarse' }
+        Mock Write-InstallLog { }
+        { Invoke-GitConfig -WhatIf } | Should -Not -Throw
+        Should -Invoke Write-InstallLog -ParameterFilter { $Message -match 'sin datos interactivos' }
     }
 }

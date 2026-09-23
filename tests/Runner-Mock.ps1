@@ -69,6 +69,8 @@ try {
     $ext = Get-Content $ExtConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
     Test-Assert ($ext.extensions.Count -eq 10) "extensions.json total=10 (real=$($ext.extensions.Count))"
     Test-Assert ((($ext.extensions | Sort-Object -Unique).Count) -eq $ext.extensions.Count) 'extensions.json sin duplicadas'
+    Test-Assert ($ext.extensions -contains 'ms-python.vscode-python-envs') 'extensions.json usa ID nuevo vscode-python-envs'
+    Test-Assert (-not ($ext.extensions -contains 'ms-python.python-envs')) 'extensions.json sin ID obsoleto python-envs'
 } catch {
     Test-Assert $false 'extensions.json valido' "$_"
 }
@@ -93,6 +95,16 @@ Remove-Item $tempLog -Force -ErrorAction SilentlyContinue
 . (Join-Path $ModulesDir 'Install-Category.ps1')
 . (Join-Path $ModulesDir 'Config-Git.ps1')
 . (Join-Path $ModulesDir 'Config-VSCode.ps1')
+
+# Flag de errores: ERROR marca InstallHadErrors, INFO no (log real en logs/, se limpia)
+$global:InstallHadErrors = $false
+Write-InstallLog -Message 'test-flag-error' -Level 'ERROR' 2>$null
+Test-Assert ($global:InstallHadErrors -eq $true) 'Write-InstallLog ERROR marca InstallHadErrors'
+$global:InstallHadErrors = $false
+Write-InstallLog -Message 'test-flag-info' -Level 'INFO' -Verbose 4>$null
+Test-Assert ($global:InstallHadErrors -eq $false) 'Write-InstallLog INFO no marca errores'
+Get-ChildItem (Join-Path $RepoRoot 'logs') -Filter 'install-*.log' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+$global:InstallHadErrors = $false
 
 # ---------------------------------------------------------------------------
 # BLOQUE 3: Test-AppInstalled + Install-WingetApp con winget mockeado
@@ -237,11 +249,23 @@ Test-Assert ($global:MockGitCalls.Count -eq 0) 'Email invalido no ejecuta git'
 Test-Assert (($script:CapturedLogs -join "`n") -match 'formato invalido') 'Email invalido loguea WARNING'
 
 Reset-Capture; $global:MockGitCalls = @()
-# En WhatIf sin params intentaria Read-Host -> mockear Read-Host ANTES para no bloquear
+# En WhatIf con params no debe llamar a git real
 function Read-Host { param($Prompt) return 'mocked' }
-Invoke-GitConfig -UserName 'A' -UserEmail 'a@b.com' -WhatIf
+Invoke-GitConfig -UserName 'Test' -UserEmail 'test@example.com' -WhatIf
 Test-Assert ($global:MockGitCalls.Count -eq 0) 'WhatIf no ejecuta git real'
 Test-Assert (($script:CapturedLogs -join "`n") -match 'simulacion') 'Git WhatIf loguea simulacion'
+Remove-Item function:\Read-Host -ErrorAction SilentlyContinue
+
+# Git WhatIf SIN params no debe bloquear pidiendo Read-Host (fix del bloqueo)
+Reset-Capture; $global:MockGitCalls = @()
+function Read-Host { param($Prompt) throw 'Read-Host no debe llamarse en WhatIf sin datos' }
+try {
+    Invoke-GitConfig -WhatIf
+    Test-Assert ($global:MockGitCalls.Count -eq 0) 'Git WhatIf sin params no ejecuta git'
+    Test-Assert (($script:CapturedLogs -join "`n") -match 'sin datos interactivos') 'Git WhatIf sin params loguea sin datos y no bloquea'
+} catch {
+    Test-Assert $false 'Git WhatIf sin params no bloquea' "$_"
+}
 Remove-Item function:\Read-Host -ErrorAction SilentlyContinue
 
 # Sin git en PATH => WARNING (simular mockeando Get-Command, SIN tocar git real)
@@ -252,7 +276,7 @@ function Get-Command {
     if ($Name -eq 'git') { return $null }
     Microsoft.PowerShell.Core\Get-Command -Name $Name @Rest -ErrorAction SilentlyContinue
 }
-Invoke-GitConfig -UserName 'A' -UserEmail 'a@b.com'
+Invoke-GitConfig -UserName 'Test' -UserEmail 'test@example.com'
 Test-Assert (($script:CapturedLogs -join "`n") -match 'no se encuentra instalado|no esta en el PATH') 'Sin git loguea WARNING y omite'
 Test-Assert ($global:MockGitCalls.Count -eq 0) 'Sin git no ejecuta git'
 Remove-Item function:\Get-Command -ErrorAction SilentlyContinue
@@ -311,6 +335,9 @@ Test-Assert ($entry -match 'SupportsShouldProcess') 'install.ps1 soporta -WhatIf
 Test-Assert ($entry -match "ValidateSet.*Base.*Dev.*Gaming.*All") 'install.ps1 ValidateSet Category'
 Test-Assert ($entry -match 'Update-SessionPath') 'install.ps1 refresca PATH tras instalar'
 Test-Assert ($entry -match "Category.*Dev.*or.*All") 'Git/VSCode solo con Dev o All'
+Test-Assert ($entry -match 'GitUserName' -and $entry -match 'GitUserEmail') 'install.ps1 acepta GitUserName/GitUserEmail'
+Test-Assert ($entry -match 'Invoke-GitConfig -UserName') 'install.ps1 pasa params a Invoke-GitConfig'
+Test-Assert ($entry -match 'InstallHadErrors') 'install.ps1 propaga errores con exit code'
 
 # Logica Win11 replicada con valores reales (solo lectura)
 $os = Get-CimInstance Win32_OperatingSystem
@@ -321,14 +348,36 @@ $isAdminNow = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsI
 Test-Assert ($isAdminNow -eq $false) 'Sesion actual NO es Admin (dry-run real abortaria como esta disenado)'
 Test-Assert ($null -ne (Get-Command winget -ErrorAction SilentlyContinue)) 'winget disponible en esta sesion'
 
-# Update-SessionPath: documentar comportamiento actual (sobrescribe PATH solo con Machine+User)
-$before = $env:Path
+# Update-SessionPath: merge real sin perder entradas solo-proceso (fix del fallo 3)
+$oldPath = $env:Path
 try {
     $m = [Environment]::GetEnvironmentVariable('Path','Machine'); $u = [Environment]::GetEnvironmentVariable('Path','User')
     Test-Assert (($null -ne $m) -or ($null -ne $u)) 'Machine/User PATH legibles para Update-SessionPath'
+    $sentinel = 'C:\TestUnicoPATH12345'
+    $env:Path = "$sentinel;$oldPath"
+    $fnText = Get-Content (Join-Path $RepoRoot 'install.ps1') -Raw
+    if ($fnText -match '(?s)function Update-SessionPath\s*\{(.*?)\n\}') {
+        $fnBody = $Matches[1]
+        $sb = [scriptblock]::Create("try { $fnBody } catch { Write-Warning `$_ }")
+        & $sb
+        Test-Assert ($env:Path -match 'TestUnicoPATH12345') 'Update-SessionPath conserva entradas del proceso'
+        $parts = $env:Path -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        $uniqueCount = ($parts | Sort-Object -Unique -CaseSensitive:$false).Count
+        Test-Assert ($parts.Count -eq $uniqueCount) 'Update-SessionPath sin duplicados'
+    } else {
+        Test-Assert $false 'Update-SessionPath extraible de install.ps1' ''
+    }
 } catch {
-    Test-Assert $false 'Leer Machine/User PATH' "$_"
+    Test-Assert $false 'Update-SessionPath merge' "$_"
+} finally {
+    $env:Path = $oldPath
 }
+
+# Sin datos personales en codigo fuente (solo tests con fixtures neutros)
+$srcFiles = @((Join-Path $RepoRoot 'install.ps1')) + (Get-ChildItem (Join-Path $RepoRoot 'modules') -Filter '*.ps1' | Select-Object -ExpandProperty FullName) + (Get-ChildItem (Join-Path $RepoRoot 'config') -Recurse -File | Select-Object -ExpandProperty FullName)
+$srcText = ($srcFiles | ForEach-Object { Get-Content $_ -Raw -ErrorAction SilentlyContinue }) -join "`n"
+Test-Assert ($srcText -notmatch 'alexp11mon|alexponmon|a@b\.com') 'Codigo fuente sin datos personales'
+Test-Assert ($srcText -notmatch 'Invoke-GitConfig -UserName "\.\.\."') 'Sin placeholders literales en llamada Git'
 
 Write-Output ''
 Write-Output '=== RESUMEN ==='

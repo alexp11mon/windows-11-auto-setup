@@ -42,7 +42,9 @@ function Write-InstallLog {
     Add-Content -Path $logPath -Value $logLine -Encoding UTF8
 
     # Reflejar errores y avisos también en consola para visibilidad inmediata.
+    # Marcar flag global para que install.ps1 pueda salir con codigo 1 si hubo errores.
     if ($Level -eq "ERROR") {
+        $global:InstallHadErrors = $true
         Write-Error $Message
     } elseif ($Level -eq "WARNING") {
         Write-Warning $Message
