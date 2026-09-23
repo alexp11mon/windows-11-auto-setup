@@ -5,36 +5,36 @@ BeforeAll {
     . (Join-Path $RepoRoot 'modules/Config-Git.ps1')
 }
 Describe 'Config-Git' {
-    It 'Skips with WARNING when git is missing from PATH' {
+    It 'Omite con WARNING si git no esta en PATH' {
         Mock Get-Command { $null } -ParameterFilter { $Name -eq 'git' }
         Mock Write-InstallLog { }
         { Invoke-GitConfig -UserName 'Test' -UserEmail 'test@example.com' } | Should -Not -Throw
         Should -Invoke Write-InstallLog -ParameterFilter { $Level -eq 'WARNING' }
     }
-    It 'Rejects invalid email without running git' {
+    It 'Rechaza email invalido sin ejecutar git' {
         Mock Get-Command { @{ Name = 'git' } } -ParameterFilter { $Name -eq 'git' }
-        Mock git { throw 'must not run' }
+        Mock git { throw 'no debe ejecutarse' }
         Mock Write-InstallLog { }
-        Invoke-GitConfig -UserName 'Test' -UserEmail 'not-an-email'
+        Invoke-GitConfig -UserName 'Test' -UserEmail 'no-es-email'
         Should -Invoke Write-InstallLog -ParameterFilter { $Level -eq 'WARNING' }
     }
-    It 'Applies user.name, user.email, defaultBranch and tree alias' {
+    It 'Aplica user.name, user.email, defaultBranch y alias tree' {
         Mock Get-Command { @{ Name = 'git' } } -ParameterFilter { $Name -eq 'git' }
         Mock git { $global:LASTEXITCODE = 0 }
         Invoke-GitConfig -UserName 'Test User' -UserEmail 'test@example.com'
         Should -Invoke git -Times 4 -Exactly
     }
-    It '-WhatIf never runs git' {
+    It '-WhatIf no ejecuta git' {
         Mock Get-Command { @{ Name = 'git' } } -ParameterFilter { $Name -eq 'git' }
-        Mock git { throw 'must not run under WhatIf' }
+        Mock git { throw 'no debe ejecutarse en WhatIf' }
         Invoke-GitConfig -UserName 'Test' -UserEmail 'test@example.com' -WhatIf
     }
-    It '-WhatIf without params never prompts for Read-Host' {
+    It '-WhatIf sin params no pide Read-Host ni bloquea' {
         Mock Get-Command { @{ Name = 'git' } } -ParameterFilter { $Name -eq 'git' }
-        Mock Read-Host { throw 'must not prompt under WhatIf' }
-        Mock git { throw 'must not run' }
+        Mock Read-Host { throw 'no debe preguntar en WhatIf' }
+        Mock git { throw 'no debe ejecutarse' }
         Mock Write-InstallLog { }
         { Invoke-GitConfig -WhatIf } | Should -Not -Throw
-        Should -Invoke Write-InstallLog -ParameterFilter { $Message -match 'no interactive input' }
+        Should -Invoke Write-InstallLog -ParameterFilter { $Message -match 'sin datos interactivos' }
     }
 }

@@ -1,6 +1,6 @@
-# Automatic Windows 11 64-bit installer.
-# Usage: .\install.ps1 [-Category Base|Dev|Gaming|All] [-WhatIf] [-GitUserName "Name"] [-GitUserEmail "email@example.com"]
-# Requires: 64-bit Windows 11, PowerShell 7, winget, Administrator execution.
+# Instalador automático Windows 11 64-bit.
+# Uso: .\install.ps1 [-Category Base|Dev|Gaming|All] [-WhatIf] [-GitUserName "Nombre"] [-GitUserEmail "email@ejemplo.com"]
+# Requiere: Windows 11 64-bit, PowerShell 7, winget, ejecución como Administrador.
 [CmdletBinding(SupportsShouldProcess = $true)]
 param (
     [ValidateSet('Base', 'Dev', 'Gaming', 'All')]
@@ -16,7 +16,10 @@ $AppsConfigPath = Join-Path -Path $RepoRoot -ChildPath "config/apps.json"
 $ExtensionsConfigPath = Join-Path -Path $RepoRoot -ChildPath "config/vscode/extensions.json"
 
 function Update-SessionPath {
-    # Merge process + Machine + User PATH so newly installed tools are found.
+    # Tras instalar apps con winget en la misma sesión, el PATH del proceso
+    # no incluye las nuevas rutas (git, code). Refrescar combinando:
+    # PATH actual del proceso + Machine + User, sin duplicados.
+    # Asi no se pierden entradas solo-proceso.
     try {
         $machine = [Environment]::GetEnvironmentVariable("Path", "Machine")
         $user = [Environment]::GetEnvironmentVariable("Path", "User")
@@ -36,22 +39,25 @@ function Update-SessionPath {
             $env:Path = $combined -join ';'
         }
     } catch {
-        Write-Warning "Could not refresh session PATH: $_"
+        Write-Warning "No se pudo refrescar el PATH de la sesion: $_"
     }
 }
 
-# 1. Administrator check
+# 1. Comprobación de permisos de Administrador
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
-    Write-Error "This script requires Administrator privileges. Open PowerShell as Administrator and try again."
+    Write-Error "Este script requiere permisos de Administrador. Abre PowerShell como Administrador y vuelve a intentarlo."
     exit 1
 }
 
-# 2. 64-bit Windows 11 check (OS, not just CPU).
-# OSArchitecture is localized ("64-bit" vs "64 bits"), so match on '64'.
+# 2. Comprobación de Windows 11 de 64 bits (SO, no solo CPU).
+# Nota: Win32_OperatingSystem.OSArchitecture viene localizado según el idioma
+# de Windows ("64-bit" en inglés, "64 bits" en español...). Por eso la
+# comparación es independiente del idioma vía -match '64', con
+# [Environment]::Is64BitOperatingSystem como condición principal.
 $os = Get-CimInstance Win32_OperatingSystem
 if ($null -eq $os) {
-    Write-Error "Could not query operating system info. Run this script in PowerShell 7 as Administrator."
+    Write-Error "No se pudo consultar la informacion del sistema operativo. Ejecuta este script en PowerShell 7 como Administrador."
     exit 1
 }
 $detectedBuild = [int]$os.BuildNumber
@@ -61,46 +67,46 @@ $isWin11 = $detectedBuild -ge 22000
 $is64BitOS = $is64BitEnv -and ($detectedArch -match '64')
 
 if (-not ($isWin11 -and $is64BitOS)) {
-    Write-Error "This script is designed exclusively for 64-bit Windows 11 (Build >= 22000, 64-bit OS). Detected: Build=$detectedBuild, Architecture='$detectedArch', OS64bit=$is64BitEnv. Execution aborted."
+    Write-Error "Este script esta disenado exclusivamente para Windows 11 de 64 bits (Build >= 22000, SO 64-bit). Detectado: Build=$detectedBuild, Arquitectura='$detectedArch', SO64bit=$is64BitEnv. Ejecucion abortada."
     exit 1
 }
 
-# 3. winget availability check
+# 3. Comprobación de disponibilidad de winget
 if (-not (Get-Command "winget" -ErrorAction SilentlyContinue)) {
-    Write-Error "The winget tool is not available on this system. Install it (App Installer from Microsoft Store) to continue."
+    Write-Error "La herramienta winget no esta disponible en este sistema. Instalala (App Installer desde Microsoft Store) para continuar."
     exit 1
 }
 
-# 4. Import base module
+# 4. Importar módulos (rutas resueltas con Join-Path anidado)
 $CommonModulePath = Join-Path -Path $RepoRoot -ChildPath (Join-Path "modules" "Common.ps1")
 if (Test-Path $CommonModulePath) {
     . $CommonModulePath
 } else {
-    Write-Error "Base module not found at: $CommonModulePath. Execution aborted."
+    Write-Error "No se encontro el modulo basico en la ruta: $CommonModulePath. Ejecucion abortada."
     exit 1
 }
 
-# 5. Start activity log
+# 5. Iniciar registro de actividad (archivo fechado en logs/)
 $global:InstallHadErrors = $false
 Initialize-InstallLog | Out-Null
-Write-InstallLog -Message "Starting automatic installer. Selected category: $Category" -Level "INFO"
+Write-InstallLog -Message "Iniciando instalador automatico. Categoria seleccionada: $Category" -Level "INFO"
 
-# 6. Import category module
+# 6. Importar módulo de categorías
 $CategoryModulePath = Join-Path -Path $RepoRoot -ChildPath (Join-Path "modules" "Install-Category.ps1")
 if (Test-Path $CategoryModulePath) {
     . $CategoryModulePath
 } else {
-    Write-InstallLog -Message "Critical failure: Install-Category module not found at: $CategoryModulePath." -Level "ERROR"
+    Write-InstallLog -Message "Fallo critico: Modulo Install-Category no encontrado en: $CategoryModulePath." -Level "ERROR"
     exit 1
 }
 
-# 7. Run winget installation ($WhatIfPreference propagates automatically)
+# 7. Ejecutar instalación de winget (-WhatIf se propaga por $WhatIfPreference)
 Invoke-InstallCategory -Category $Category -AppsConfigPath $AppsConfigPath
 
-# Refresh PATH so newly installed git/code are found without restarting.
+# Refrescar PATH para que git/code recién instalados sean detectables sin reiniciar.
 Update-SessionPath
 
-# 8. Git configuration (Dev or All only)
+# 8. Configuración de Git (solo Dev o All)
 $GitModulePath = Join-Path -Path $RepoRoot -ChildPath (Join-Path "modules" "Config-Git.ps1")
 if (Test-Path $GitModulePath) {
     . $GitModulePath
@@ -109,10 +115,10 @@ if (Test-Path $GitModulePath) {
         Invoke-GitConfig -UserName $GitUserName -UserEmail $GitUserEmail
     }
 } else {
-    Write-InstallLog -Message "Git configuration module not found at: $GitModulePath" -Level "WARNING"
+    Write-InstallLog -Message "Modulo de configuracion de Git no encontrado en: $GitModulePath" -Level "WARNING"
 }
 
-# 9. VSCode configuration (Dev or All only)
+# 9. Configuración de VSCode (solo Dev o All)
 $VSCodeModulePath = Join-Path -Path $RepoRoot -ChildPath (Join-Path "modules" "Config-VSCode.ps1")
 if (Test-Path $VSCodeModulePath) {
     . $VSCodeModulePath
@@ -121,13 +127,13 @@ if (Test-Path $VSCodeModulePath) {
         Invoke-VSCodeConfig -ExtensionsConfigPath $ExtensionsConfigPath
     }
 } else {
-    Write-InstallLog -Message "VSCode configuration module not found at: $VSCodeModulePath" -Level "WARNING"
+    Write-InstallLog -Message "Modulo de configuracion de VSCode no encontrado en: $VSCodeModulePath" -Level "WARNING"
 }
 
-# 10. Finish
-Write-InstallLog -Message "Installer execution finished." -Level "INFO"
+# 10. Cierre
+Write-InstallLog -Message "Ejecucion del instalador finalizada." -Level "INFO"
 if ($global:InstallHadErrors) {
-    Write-Host "Process completed with errors. Check the logs/ folder for details." -ForegroundColor Red
+    Write-Host "Proceso completado con errores. Revisa la carpeta logs/ para mas detalles." -ForegroundColor Red
     exit 1
 }
-Write-Host "Process completed. Check the logs/ folder for details." -ForegroundColor Green
+Write-Host "Proceso completado. Revisa la carpeta logs/ para mas detalles." -ForegroundColor Green

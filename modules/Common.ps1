@@ -1,7 +1,8 @@
-# Common.ps1 - Shared installer functions.
-# Requires PowerShell 7+. Importing it has no side effects.
+# Common.ps1 - Funciones compartidas del instalador.
+# Requiere PowerShell 7+. No ejecuta nada al importarse salvo inicializar la ruta de log.
 
-# Current run log path, set once per process.
+# Ruta del log de la ejecución actual. Se fija una sola vez por proceso
+# para que todas las llamadas a Write-InstallLog escriban al mismo archivo fechado.
 $script:InstallLogPath = $null
 
 function Initialize-InstallLog {
@@ -12,7 +13,7 @@ function Initialize-InstallLog {
         return $script:InstallLogPath
     }
 
-    # $PSScriptRoot here is the modules/ folder.
+    # $PSScriptRoot aquí (ámbito de script) es la carpeta modules/.
     $repoRoot = Split-Path -Parent $PSScriptRoot
     $logsDir = Join-Path -Path $repoRoot -ChildPath "logs"
     if (-not (Test-Path $logsDir)) {
@@ -40,7 +41,8 @@ function Write-InstallLog {
 
     Add-Content -Path $logPath -Value $logLine -Encoding UTF8
 
-    # Mirror errors/warnings to the console and flag failures for the exit code.
+    # Reflejar errores y avisos también en consola para visibilidad inmediata.
+    # Marcar flag global para que install.ps1 pueda salir con codigo 1 si hubo errores.
     if ($Level -eq "ERROR") {
         $global:InstallHadErrors = $true
         Write-Error $Message
@@ -63,7 +65,7 @@ function Test-AppInstalled {
         return $false
     }
 
-    # Escape dots in $AppId so they are not treated as regex.
+    # $AppId contiene puntos (p. ej. Brave.Brave): escapar para no tratarlos como regex.
     $pattern = [regex]::Escape($AppId)
     if ($output | Select-String -Pattern $pattern -Quiet) {
         return $true
@@ -81,28 +83,30 @@ function Install-WingetApp {
         [string]$AppName
     )
 
+    # Idempotencia: omitir si ya está instalado.
     if (Test-AppInstalled -AppId $AppId) {
-        Write-InstallLog -Message "Program $AppName ($AppId) is already installed. Skipping." -Level "INFO"
+        Write-InstallLog -Message "El programa $AppName ($AppId) ya esta instalado. Omitiendo." -Level "INFO"
         return
     }
 
-    if ($PSCmdlet.ShouldProcess($AppName, "Install via winget")) {
-        Write-InstallLog -Message "Starting installation of $AppName ($AppId)..." -Level "INFO"
+    if ($PSCmdlet.ShouldProcess($AppName, "Instalar mediante winget")) {
+        Write-InstallLog -Message "Iniciando instalacion de $AppName ($AppId)..." -Level "INFO"
 
         winget install --exact --id $AppId --accept-source-agreements --accept-package-agreements --silent
         $wingetExit = $LASTEXITCODE
 
         if ($wingetExit -ne 0) {
-            Write-InstallLog -Message "winget returned code $wingetExit while installing: $AppName ($AppId). Check the console." -Level "ERROR"
+            Write-InstallLog -Message "winget devolvio codigo $wingetExit al instalar: $AppName ($AppId). Revisa la consola." -Level "ERROR"
             return
         }
 
+        # Verificación final (puede tardar en reflejarse en PATH/registro).
         if (Test-AppInstalled -AppId $AppId) {
-            Write-InstallLog -Message "Installation succeeded: $AppName" -Level "INFO"
+            Write-InstallLog -Message "Instalacion exitosa: $AppName" -Level "INFO"
         } else {
-            Write-InstallLog -Message "Failed to install: $AppName ($AppId). winget exited without error but the app is missing from 'winget list'." -Level "ERROR"
+            Write-InstallLog -Message "Error al instalar: $AppName ($AppId). winget termino sin error pero la app no aparece en 'winget list'." -Level "ERROR"
         }
     } else {
-        Write-InstallLog -Message "Simulation mode enabled. Would install: $AppName ($AppId)" -Level "INFO"
+        Write-InstallLog -Message "Modo simulacion activado. Se instalaria: $AppName ($AppId)" -Level "INFO"
     }
 }

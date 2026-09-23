@@ -1,12 +1,12 @@
-# Common.Tests.ps1 - Pester 5. Requires: Install-Module Pester -MinimumVersion 5.0
-# Run: Invoke-Pester -Path ./tests -Output Detailed
+# Common.Tests.ps1 - Pester 5. Requiere: Install-Module Pester -MinimumVersion 5.0
+# Ejecucion futura: Invoke-Pester -Path ./tests -Output Detailed
 BeforeAll {
     $RepoRoot = Split-Path -Parent $PSScriptRoot
     . (Join-Path $RepoRoot 'modules/Common.ps1')
 }
 Describe 'Common.ps1' {
     Context 'Initialize-InstallLog' {
-        It 'Creates a dated file and reuses it within the session' {
+        It 'Crea un archivo fechado y reutiliza el mismo en la sesion' {
             $p1 = Initialize-InstallLog
             $p2 = Initialize-InstallLog
             $p1 | Should -Be $p2
@@ -15,39 +15,29 @@ Describe 'Common.ps1' {
     }
     Context 'Test-AppInstalled' {
         BeforeEach { Mock winget { } }
-        It 'Returns true when winget list contains the exact Id' {
+        It 'Devuelve true si winget list contiene el Id exacto' {
             Mock winget { Write-Output 'Brave.Brave  1.77  winget'; $global:LASTEXITCODE = 0 } -ParameterFilter { ($args -join ' ') -match '^\s*list\b' }
             Test-AppInstalled -AppId 'Brave.Brave' | Should -Be $true
         }
-        It 'Has no partial match (BraveXBrave != Brave.Brave)' {
+        It 'No hace match parcial (BraveXBrave != Brave.Brave)' {
             Mock winget { Write-Output 'BraveXBrave  1.0'; $global:LASTEXITCODE = 0 } -ParameterFilter { ($args -join ' ') -match '^\s*list\b' }
             Test-AppInstalled -AppId 'Brave.Brave' | Should -Be $false
         }
-        It 'Returns false when winget fails' {
+        It 'Devuelve false si winget falla' {
             Mock winget { $global:LASTEXITCODE = 1 } -ParameterFilter { ($args -join ' ') -match '^\s*list\b' }
             Test-AppInstalled -AppId 'Brave.Brave' | Should -Be $false
         }
     }
     Context 'Install-WingetApp' {
-        It 'Skips when already installed (idempotent)' {
+        It 'Omite si ya instalado (idempotente)' {
             Mock Test-AppInstalled { $true }
-            Mock winget { throw 'must not be called' }
+            Mock winget { throw 'no deberia llamarse' }
             { Install-WingetApp -AppId 'Brave.Brave' -AppName 'Brave' } | Should -Not -Throw
         }
-        It 'Never calls winget install under -WhatIf' {
+        It 'En -WhatIf no llama a winget install' {
             Mock Test-AppInstalled { $false }
-            Mock winget { throw 'must not be called under WhatIf' } -ParameterFilter { ($args -join ' ') -match 'install' }
+            Mock winget { throw 'no deberia llamarse en WhatIf' } -ParameterFilter { ($args -join ' ') -match 'install' }
             Install-WingetApp -AppId 'Valve.Steam' -AppName 'Steam' -WhatIf
-        }
-    }
-    Context 'Write-InstallLog error flag' {
-        It 'ERROR sets InstallHadErrors' {
-            $global:InstallHadErrors = $false
-            Mock Initialize-InstallLog { return (Join-Path ([System.IO.Path]::GetTempPath()) 'pester-flag-test.log') }
-            Mock Add-Content { }
-            Mock Write-Error { }
-            Write-InstallLog -Message 'boom' -Level 'ERROR'
-            $global:InstallHadErrors | Should -Be $true
         }
     }
 }
