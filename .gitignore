@@ -1,0 +1,10 @@
+# Logs de ejecucion (se generan con fecha en cada corrida)
+logs/*.log
+
+# Temporales de Windows
+Desktop.ini
+Thumbs.db
+*.tmp
+
+# VSCode
+.vscode/
