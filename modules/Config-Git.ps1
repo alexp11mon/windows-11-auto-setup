@@ -5,60 +5,59 @@ function Invoke-GitConfig {
         [string]$UserEmail = ""
     )
 
-    # 1. Comprobar si Git está instalado en el sistema.
+    # 1. Check whether Git is installed.
     if (-not (Get-Command "git" -ErrorAction SilentlyContinue)) {
-        Write-InstallLog -Message "Git no se encuentra instalado o no esta en el PATH de esta sesion. Se omite la configuracion de Git (reinicia la terminal si se instalo en esta misma ejecucion)." -Level "WARNING"
+        Write-InstallLog -Message "Git is not installed or not on this session's PATH. Skipping Git configuration (restart the terminal if it was installed during this run)." -Level "WARNING"
         return
     }
 
-    # 2. En modo simulacion sin datos, no preguntar (evita bloqueo en -WhatIf/automatizacion).
+    # 2. In simulation mode without data, do not prompt.
     if ($WhatIfPreference -and ([string]::IsNullOrWhiteSpace($UserName) -or [string]::IsNullOrWhiteSpace($UserEmail))) {
-        Write-InstallLog -Message "Modo simulacion activado. Se configuraria Git (sin datos interactivos)." -Level "INFO"
+        Write-InstallLog -Message "Simulation mode enabled. Would configure Git (no interactive input)." -Level "INFO"
         return
     }
 
-    # 3. Solicitar datos personales interactivos con validación básica.
+    # 3. Ask for personal data with basic validation.
     if ([string]::IsNullOrWhiteSpace($UserName)) {
-        $UserName = Read-Host "Por favor, introduce tu nombre de usuario para Git"
+        $UserName = Read-Host "Enter your user name for Git"
     }
     if ([string]::IsNullOrWhiteSpace($UserEmail)) {
-        $UserEmail = Read-Host "Por favor, introduce tu correo electronico para Git"
+        $UserEmail = Read-Host "Enter your email address for Git"
     }
 
     if ([string]::IsNullOrWhiteSpace($UserName) -or [string]::IsNullOrWhiteSpace($UserEmail)) {
-        Write-InstallLog -Message "Nombre o email vacios. Se omite la configuracion de Git." -Level "WARNING"
+        Write-InstallLog -Message "Empty name or email. Skipping Git configuration." -Level "WARNING"
         return
     }
     if ($UserEmail -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
-        Write-InstallLog -Message "Email con formato invalido ('$UserEmail'). Se omite la configuracion de Git." -Level "WARNING"
+        Write-InstallLog -Message "Invalid email format ('$UserEmail'). Skipping Git configuration." -Level "WARNING"
         return
     }
 
-    # 4. Soporte WhatIf y aplicación de configuración.
-    if ($PSCmdlet.ShouldProcess("Configuracion global de Git", "Aplicar alias y credenciales para $UserName")) {
-        Write-InstallLog -Message "Aplicando configuracion base de Git para $UserName..." -Level "INFO"
+    # 4. Apply configuration with WhatIf support.
+    if ($PSCmdlet.ShouldProcess("Global Git configuration", "Apply aliases and credentials for $UserName")) {
+        Write-InstallLog -Message "Applying base Git configuration for $UserName..." -Level "INFO"
 
-        # Nota: entrecomillar para soportar nombres con espacios. Los comandos
-        # nativos no lanzan excepciones: hay que comprobar $LASTEXITCODE.
+        # Quote names with spaces. Native commands do not throw: check $LASTEXITCODE.
         git config --global user.name "$UserName"
         if ($LASTEXITCODE -ne 0) {
-            Write-InstallLog -Message "Fallo al configurar user.name en Git (codigo $LASTEXITCODE)." -Level "ERROR"
+            Write-InstallLog -Message "Failed to set user.name in Git (code $LASTEXITCODE)." -Level "ERROR"
             return
         }
         git config --global user.email "$UserEmail"
         if ($LASTEXITCODE -ne 0) {
-            Write-InstallLog -Message "Fallo al configurar user.email en Git (codigo $LASTEXITCODE)." -Level "ERROR"
+            Write-InstallLog -Message "Failed to set user.email in Git (code $LASTEXITCODE)." -Level "ERROR"
             return
         }
         git config --global init.defaultBranch "main"
         git config --global alias.tree "log --graph --decorate --all --oneline"
         if ($LASTEXITCODE -ne 0) {
-            Write-InstallLog -Message "Fallo al configurar valores por defecto/alias en Git (codigo $LASTEXITCODE)." -Level "ERROR"
+            Write-InstallLog -Message "Failed to set Git defaults/aliases (code $LASTEXITCODE)." -Level "ERROR"
             return
         }
 
-        Write-InstallLog -Message "Configuracion de Git aplicada con exito. Alias 'tree' creado." -Level "INFO"
+        Write-InstallLog -Message "Git configuration applied successfully. Alias 'tree' created." -Level "INFO"
     } else {
-        Write-InstallLog -Message "Modo simulacion activado. Se configuraria Git para el usuario: $UserName ($UserEmail)." -Level "INFO"
+        Write-InstallLog -Message "Simulation mode enabled. Would configure Git for user: $UserName ($UserEmail)." -Level "INFO"
     }
 }

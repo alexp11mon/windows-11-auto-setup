@@ -6,30 +6,30 @@ BeforeAll {
     $script:Apps = Join-Path $RepoRoot 'config/apps.json'
 }
 Describe 'Install-Category' {
-    It 'All expande a 14 apps (4+7+3)' {
+    It 'All expands to 14 apps (4+7+3)' {
         Mock Install-WingetApp { }
         Invoke-InstallCategory -Category 'All' -AppsConfigPath $script:Apps
         Should -Invoke Install-WingetApp -Times 14 -Exactly
     }
-    It 'Base instala 4' {
+    It 'Base installs 4' {
         Mock Install-WingetApp { }
         Invoke-InstallCategory -Category 'Base' -AppsConfigPath $script:Apps
         Should -Invoke Install-WingetApp -Times 4 -Exactly
     }
-    It 'Fichero inexistente loguea ERROR sin lanzar' {
+    It 'Missing file logs ERROR without throwing' {
         Mock Write-InstallLog { }
         { Invoke-InstallCategory -Category 'Base' -AppsConfigPath 'noexiste.json' } | Should -Not -Throw
         Should -Invoke Write-InstallLog -ParameterFilter { $Level -eq 'ERROR' }
     }
-    It 'JSON invalido loguea ERROR' {
+    It 'Invalid JSON logs ERROR' {
         $bad = Join-Path ([System.IO.Path]::GetTempPath()) 'bad-apps.json'
-        '{ invalido' | Set-Content $bad -Encoding UTF8
+        '{ invalid' | Set-Content $bad -Encoding UTF8
         Mock Write-InstallLog { }
         Invoke-InstallCategory -Category 'Base' -AppsConfigPath $bad
         Should -Invoke Write-InstallLog -ParameterFilter { $Level -eq 'ERROR' }
         Remove-Item $bad -Force -ErrorAction SilentlyContinue
     }
-    It 'Categoria vacia loguea WARNING' {
+    It 'Empty category logs WARNING' {
         $empty = Join-Path ([System.IO.Path]::GetTempPath()) 'empty-apps.json'
         '{ "Base": [] }' | Set-Content $empty -Encoding UTF8
         Mock Write-InstallLog { }
