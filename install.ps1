@@ -1,71 +1,86 @@
-# 1. Definir categorías de instalación
+# Instalador automático Windows 11 64-bit.
+# Uso: .\install.ps1 [-Category Base|Dev|Gaming|All] [-WhatIf]
+# Requiere: Windows 11 64-bit, PowerShell 7, winget, ejecución como Administrador.
 [CmdletBinding(SupportsShouldProcess = $true)]
 param (
-    # 
     [ValidateSet('Base', 'Dev', 'Gaming', 'All')]
     [string]$Category = 'All'
 )
 
-# 2. Comprobacion de permisos de Administrador
+$RepoRoot = $PSScriptRoot
+$AppsConfigPath = Join-Path -Path $RepoRoot -ChildPath "config/apps.json"
+$ExtensionsConfigPath = Join-Path -Path $RepoRoot -ChildPath "config/vscode/extensions.json"
+
+function Update-SessionPath {
+    # Tras instalar apps con winget en la misma sesión, el PATH del proceso
+    # no incluye las nuevas rutas (git, code). Refrescar desde Machine + User.
+    try {
+        $machine = [Environment]::GetEnvironmentVariable("Path", "Machine")
+        $user = [Environment]::GetEnvironmentVariable("Path", "User")
+        if ($machine -or $user) {
+            $env:Path = "$machine;$user"
+        }
+    } catch {
+        Write-Warning "No se pudo refrescar el PATH de la sesion: $_"
+    }
+}
+
+# 1. Comprobación de permisos de Administrador
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-
 if (-not $isAdmin) {
-    Write-Error "Este script requiere permisos de Administrador. Por favor, abre PowerShell como Administrador y vuelve a intentarlo."
-    exit
+    Write-Error "Este script requiere permisos de Administrador. Abre PowerShell como Administrador y vuelve a intentarlo."
+    exit 1
 }
 
-# 3. Comprobacion de Windows 11 de 64 bits
+# 2. Comprobación de Windows 11 de 64 bits (SO, no solo CPU)
 $os = Get-CimInstance Win32_OperatingSystem
-$cpu = Get-CimInstance Win32_Processor
+$isWin11 = [int]$os.BuildNumber -ge 22000
+$is64BitOS = [Environment]::Is64BitOperatingSystem -and ($os.OSArchitecture -eq "64-bit")
 
-$isWin11 = $os.BuildNumber -ge 22000
-$is64Bit = $cpu.AddressWidth -eq 64
-
-if (-not ($isWin11 -and $is64Bit)) {
-    Write-Error "Este script esta disenado exclusivamente para Windows 11 de 64 bits. Ejecucion abortada."
-    exit
+if (-not ($isWin11 -and $is64BitOS)) {
+    Write-Error "Este script esta disenado exclusivamente para Windows 11 de 64 bits (Build >= 22000, SO 64-bit). Ejecucion abortada."
+    exit 1
 }
 
-# 4. Comprobacion de disponibilidad de winget
+# 3. Comprobación de disponibilidad de winget
 if (-not (Get-Command "winget" -ErrorAction SilentlyContinue)) {
-    Write-Error "La herramienta winget no esta disponible en este sistema. Por favor, instalala para continuar."
-    exit
+    Write-Error "La herramienta winget no esta disponible en este sistema. Instalala (App Installer desde Microsoft Store) para continuar."
+    exit 1
 }
 
-# 5. Importar modulos comunes
-$CommonModulePath = Join-Path -Path $PSScriptRoot -ChildPath "modules\Common.ps1"
-
+# 4. Importar módulos (rutas resueltas con Join-Path anidado)
+$CommonModulePath = Join-Path -Path $RepoRoot -ChildPath (Join-Path "modules" "Common.ps1")
 if (Test-Path $CommonModulePath) {
     . $CommonModulePath
 } else {
     Write-Error "No se encontro el modulo basico en la ruta: $CommonModulePath. Ejecucion abortada."
-    exit
+    exit 1
 }
 
-# 6. Iniciar registro de actividad
+# 5. Iniciar registro de actividad (archivo fechado en logs/)
+Initialize-InstallLog | Out-Null
 Write-InstallLog -Message "Iniciando instalador automatico. Categoria seleccionada: $Category" -Level "INFO"
 
-# 7. Importar modulo de categorias
-$CategoryModulePath = Join-Path -Path $PSScriptRoot -ChildPath "modules\Install-Category.ps1"
-
+# 6. Importar módulo de categorías
+$CategoryModulePath = Join-Path -Path $RepoRoot -ChildPath (Join-Path "modules" "Install-Category.ps1")
 if (Test-Path $CategoryModulePath) {
     . $CategoryModulePath
 } else {
-    Write-Error "No se encontro el modulo de categorias en la ruta: $CategoryModulePath."
-    Write-InstallLog -Message "Fallo critico: Modulo Install-Category no encontrado." -Level "ERROR"
-    exit
+    Write-InstallLog -Message "Fallo critico: Modulo Install-Category no encontrado en: $CategoryModulePath." -Level "ERROR"
+    exit 1
 }
 
-# 8. Ejecutar instalacion de winget
-Invoke-InstallCategory -Category $Category
+# 7. Ejecutar instalación de winget (-WhatIf se propaga por $WhatIfPreference)
+Invoke-InstallCategory -Category $Category -AppsConfigPath $AppsConfigPath
 
-# 9.1. Importar y ejecutar configuracion de Git
-$GitModulePath = Join-Path -Path $PSScriptRoot -ChildPath "modules\Config-Git.ps1"
+# Refrescar PATH para que git/code recién instalados sean detectables sin reiniciar.
+Update-SessionPath
 
+# 8. Configuración de Git (solo Dev o All)
+$GitModulePath = Join-Path -Path $RepoRoot -ChildPath (Join-Path "modules" "Config-Git.ps1")
 if (Test-Path $GitModulePath) {
     . $GitModulePath
-    
-    # Solo configuramos Git si la categoria incluye 'Dev' o es 'All'
+
     if ($Category -eq 'Dev' -or $Category -eq 'All') {
         Invoke-GitConfig
     }
@@ -73,15 +88,13 @@ if (Test-Path $GitModulePath) {
     Write-InstallLog -Message "Modulo de configuracion de Git no encontrado en: $GitModulePath" -Level "WARNING"
 }
 
-# 9.2. Importar y ejecutar configuracion de VSCode
-$VSCodeModulePath = Join-Path -Path $PSScriptRoot -ChildPath "modules\Config-VSCode.ps1"
-
+# 9. Configuración de VSCode (solo Dev o All)
+$VSCodeModulePath = Join-Path -Path $RepoRoot -ChildPath (Join-Path "modules" "Config-VSCode.ps1")
 if (Test-Path $VSCodeModulePath) {
     . $VSCodeModulePath
-    
-    # Solo instalamos extensiones si la categoria incluye 'Dev' o es 'All'
+
     if ($Category -eq 'Dev' -or $Category -eq 'All') {
-        Invoke-VSCodeConfig
+        Invoke-VSCodeConfig -ExtensionsConfigPath $ExtensionsConfigPath
     }
 } else {
     Write-InstallLog -Message "Modulo de configuracion de VSCode no encontrado en: $VSCodeModulePath" -Level "WARNING"
