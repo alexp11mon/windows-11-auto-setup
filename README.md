@@ -89,8 +89,8 @@ Notas:
 Desde PowerShell 7 (**no** hace falta abrirlo como admin: `bootstrap.ps1` se auto-eleva solo):
 
 ```powershell
-# 1. Descargar el lanzador (rama feature/online-install hasta su merge a master)
-Invoke-WebRequest https://raw.githubusercontent.com/alexp11mon/windows-11-auto-setup/feature/online-install/bootstrap.ps1 -OutFile bootstrap.ps1
+# 1. Descargar el lanzador
+Invoke-WebRequest https://raw.githubusercontent.com/alexp11mon/windows-11-auto-setup/master/bootstrap.ps1 -OutFile bootstrap.ps1
 
 # 2a. Simular primero (recomendado)
 .\bootstrap.ps1 -Category All -WhatIf
