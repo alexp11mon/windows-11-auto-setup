@@ -20,16 +20,23 @@ Configurador automático de PC nuevo con Windows 11 64-bit: instala apps con win
 Desde PowerShell 7 (**no** hace falta abrirlo como admin: `bootstrap.ps1` se auto-eleva solo):
 
 ```powershell
-# 1. Descargar el lanzador
+# Opción A: un solo comando con menú interactivo (elige con flechas + Espacio)
+irm https://raw.githubusercontent.com/alexp11mon/windows-11-auto-setup/master/bootstrap.ps1 | iex
+```
+
+El menú te deja elegir alcance (`All`, `Base`, `Dev`, `Gaming` o personalizado por app con Espacio), configurar u omitir Git, y confirmar o simular antes de instalar.
+
+```powershell
+# Opción B: descargar el lanzador y ejecutarlo con parámetros
 Invoke-WebRequest https://raw.githubusercontent.com/alexp11mon/windows-11-auto-setup/master/bootstrap.ps1 -OutFile bootstrap.ps1
 
-# 2a. Simular primero (recomendado)
+# Simular primero (recomendado)
 .\bootstrap.ps1 -Category All -WhatIf
 
-# 2b. Instalación completa
+# Instalación completa
 .\bootstrap.ps1 -Category All
 
-# 2c. Con Git no interactivo
+# Con Git no interactivo
 .\bootstrap.ps1 -Category Dev -GitUserName "Tu Nombre" -GitUserEmail "tu@email.com"
 ```
 
@@ -122,7 +129,7 @@ Con `Dev` o `All` además se aplica configuración de Git (`user.name`, `user.em
 ## Tests (no instalan nada, todo mockeado)
 
 ```powershell
-# Suite principal sin dependencias (78 checks)
+# Suite principal sin dependencias (92 checks)
 pwsh -NoProfile -File tests/Runner-Mock.ps1
 
 # Tests Pester 5 (requiere Install-Module Pester -MinimumVersion 5.0)

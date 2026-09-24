@@ -5,6 +5,8 @@
 #   .\bootstrap.ps1 [-Category Base|Dev|Gaming|All] [-WhatIf]
 #                   [-GitUserName "Name"] [-GitUserEmail "email@example.com"]
 #                   [-Branch "master"] [-KeepDownload]
+# One-line interactive mode (no download, arrow-key menu):
+#   irm https://raw.githubusercontent.com/alexp11mon/windows-11-auto-setup/master/bootstrap.ps1 | iex
 # Remote two-line mode (no local clone needed):
 #   Invoke-WebRequest https://raw.githubusercontent.com/alexp11mon/windows-11-auto-setup/master/bootstrap.ps1 -OutFile bootstrap.ps1
 #   .\bootstrap.ps1 -Category All -WhatIf
@@ -24,12 +26,128 @@ param (
     [switch]$KeepDownload
 )
 
+function Show-Menu {
+    param (
+        [string]$Title,
+        [string[]]$Options,
+        [switch]$Multi
+    )
+    $selected = 0
+    $checked = @($false) * $Options.Count
+    while ($true) {
+        Clear-Host
+        Write-Host $Title -ForegroundColor Cyan
+        Write-Host "Use ↑/↓, Space to mark, Enter to confirm, Esc to cancel" -ForegroundColor DarkGray
+        for ($i = 0; $i -lt $Options.Count; $i++) {
+            $cursor = if ($i -eq $selected) { ">" } else { " " }
+            $mark = if ($Multi -and $checked[$i]) { "[x]" } else { "[ ]" }
+            $prefix = if ($Multi) { "$cursor $mark" } else { "$cursor" }
+            if ($i -eq $selected) {
+                Write-Host "$prefix $($Options[$i])" -ForegroundColor Green
+            } else {
+                Write-Host "$prefix $($Options[$i])"
+            }
+        }
+        $key = [Console]::ReadKey($true)
+        switch ($key.Key) {
+            'UpArrow'   { $selected = ($selected - 1 + $Options.Count) % $Options.Count }
+            'DownArrow' { $selected = ($selected + 1) % $Options.Count }
+            'Spacebar'  { if ($Multi) { $checked[$selected] = -not $checked[$selected] } }
+            'Enter'     {
+                if ($Multi) { return ,@($Options | Where-Object { $checked[$Options.IndexOf($_)] }) }
+                return $selected
+            }
+            'Escape'    { return $null }
+        }
+    }
+}
+
+function Show-NumberedMenu {
+    # Fallback when no console is available (ISE, redirected input).
+    param (
+        [string]$Title,
+        [string[]]$Options,
+        [switch]$Multi
+    )
+    Write-Host $Title -ForegroundColor Cyan
+    for ($i = 0; $i -lt $Options.Count; $i++) {
+        Write-Host ("  {0}. {1}" -f ($i + 1), $Options[$i])
+    }
+    if ($Multi) {
+        $answer = Read-Host "Enter numbers separated by commas (empty cancels)"
+        if ([string]::IsNullOrWhiteSpace($answer)) { return $null }
+        $picked = @()
+        foreach ($n in ($answer -split ',')) {
+            $idx = 0
+            if ([int]::TryParse($n.Trim(), [ref]$idx) -and $idx -ge 1 -and $idx -le $Options.Count) {
+                $picked += $Options[$idx - 1]
+            }
+        }
+        if ($picked.Count -eq 0) { return $null }
+        return ,$picked
+    }
+    $answer = Read-Host ("Enter a number 1-{0} (empty cancels)" -f $Options.Count)
+    if ([string]::IsNullOrWhiteSpace($answer)) { return $null }
+    $idx = 0
+    if (-not [int]::TryParse($answer.Trim(), [ref]$idx) -or $idx -lt 1 -or $idx -gt $Options.Count) { return $null }
+    return ($idx - 1)
+}
+
 $ZipUrl = "https://github.com/$Repo/archive/refs/heads/$Branch.zip"
 
 # 1. Require PowerShell 7
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     Write-Error "PowerShell 7 (pwsh) is required to run the online installer. Install it with: winget install --id Microsoft.PowerShell --exact --accept-source-agreements --accept-package-agreements"
     exit 1
+}
+
+$menuFallback = $false
+try { $null = [Console]::KeyAvailable } catch { $menuFallback = $true }
+function Invoke-Menu {
+    # Arrow-key menu when a console exists, numbered fallback otherwise.
+    param (
+        [string]$Title,
+        [string[]]$Options,
+        [switch]$Multi
+    )
+    if ($menuFallback) { Show-NumberedMenu -Title $Title -Options $Options -Multi:$Multi }
+    else { Show-Menu -Title $Title -Options $Options -Multi:$Multi }
+}
+
+$customApps = @()
+$interactive = ($PSBoundParameters.Count -eq 0) -and [Environment]::UserInteractive -and (-not $WhatIfPreference)
+
+if ($interactive) {
+    $scope = Invoke-Menu -Title "What do you want to install?" -Options @('All', 'Base', 'Dev', 'Gaming', 'Custom per-app')
+    if ($null -eq $scope) { Write-Host "Cancelled." -ForegroundColor Yellow; exit 0 }
+    if ($scope -eq 4) {
+        $Category = 'All'
+        $customApps = @()
+        $appsUrl = "https://raw.githubusercontent.com/$Repo/$Branch/config/apps.json"
+        try {
+            $appsData = Invoke-RestMethod -Uri $appsUrl
+        } catch {
+            Write-Error "Could not download the app list from: $appsUrl. $_"
+            exit 1
+        }
+        $flat = @($appsData.Base) + @($appsData.Dev) + @($appsData.Gaming)
+        $customApps = Invoke-Menu -Title "Mark apps with Space, Enter to confirm" -Options $flat -Multi
+        if ($null -eq $customApps -or $customApps.Count -eq 0) { Write-Host "Cancelled." -ForegroundColor Yellow; exit 0 }
+    } else {
+        $Category = @('All', 'Base', 'Dev', 'Gaming')[$scope]
+    }
+    $gitChoice = Invoke-Menu -Title "Git configuration?" -Options @('Enter name/email', 'Skip Git configuration')
+    if ($null -eq $gitChoice) { Write-Host "Cancelled." -ForegroundColor Yellow; exit 0 }
+    if ($gitChoice -eq 0) {
+        $GitUserName = Read-Host "Enter your user name for Git"
+        $GitUserEmail = Read-Host "Enter your email address for Git"
+    }
+    $confirm = Invoke-Menu -Title "Ready: Category=$Category Apps=$(if ($customApps.Count) { $customApps.Count } else { 'all' }) Git=$(if ($gitChoice -eq 0) { $GitUserName } else { 'skipped' })" -Options @('Install now', 'Simulate first (-WhatIf)', 'Cancel')
+    if ($null -eq $confirm -or $confirm -eq 2) { Write-Host "Cancelled." -ForegroundColor Yellow; exit 0 }
+    if ($confirm -eq 1) {
+        Write-Host "Would download: $ZipUrl" -ForegroundColor Cyan
+        exit 0
+    }
 }
 
 # 2. Simulation mode: only describe what would happen, no side effects
@@ -46,7 +164,13 @@ if ($WhatIfPreference) {
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     Write-Host "Requesting Administrator privileges..." -ForegroundColor Yellow
-    $elevArgs = @('-NoProfile', '-File', "`"$PSCommandPath`"", '-Category', $Category, '-Repo', $Repo, '-Branch', $Branch)
+    # Under iex there is no script file, so persist our own code first.
+    $selfPath = $PSCommandPath
+    if ([string]::IsNullOrWhiteSpace($selfPath)) {
+        $selfPath = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "bootstrap-iex.ps1"
+        $MyInvocation.MyCommand.ScriptBlock.ToString() | Set-Content -Path $selfPath -Encoding UTF8
+    }
+    $elevArgs = @('-NoProfile', '-File', "`"$selfPath`"", '-Category', $Category, '-Repo', $Repo, '-Branch', $Branch)
     if (-not [string]::IsNullOrWhiteSpace($GitUserName)) { $elevArgs += @('-GitUserName', "`"$GitUserName`"") }
     if (-not [string]::IsNullOrWhiteSpace($GitUserEmail)) { $elevArgs += @('-GitUserEmail', "`"$GitUserEmail`"") }
     if ($KeepDownload) { $elevArgs += '-KeepDownload' }
@@ -98,6 +222,19 @@ $installScript = Get-ChildItem -Path $extractDir -Recurse -Filter "install.ps1" 
 if ($null -eq $installScript) {
     Write-Error "install.ps1 not found in the downloaded archive."
     exit 1
+}
+
+# Custom per-app mode: keep only the selected IDs in the extracted apps.json.
+if ($customApps -and $customApps.Count -gt 0) {
+    $extractedApps = Get-ChildItem -Path $extractDir -Recurse -Filter "apps.json" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -ne $extractedApps) {
+        $cfg = Get-Content -Path $extractedApps.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+        foreach ($prop in @('Base', 'Dev', 'Gaming')) {
+            $cfg.$prop = @($cfg.$prop | Where-Object { $customApps -contains $_ })
+        }
+        $cfg | ConvertTo-Json -Depth 3 | Set-Content -Path $extractedApps.FullName -Encoding UTF8
+        Write-Host "Custom selection: $($customApps.Count) apps." -ForegroundColor Cyan
+    }
 }
 Write-Host "Running: $($installScript.FullName) -Category $Category" -ForegroundColor Green
 

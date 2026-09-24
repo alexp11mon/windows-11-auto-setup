@@ -386,6 +386,60 @@ $srcText = ($srcFiles | ForEach-Object { Get-Content $_ -Raw -ErrorAction Silent
 Test-Assert ($srcText -notmatch 'alexp11mon|alexponmon|a@b\.com') 'Codigo fuente sin datos personales'
 Test-Assert ($srcText -notmatch 'Invoke-GitConfig -UserName "\.\.\."') 'Sin placeholders literales en llamada Git'
 
+# ---------------------------------------------------------------------------
+# BLOQUE 8: bootstrap.ps1 instalador en linea (estatico + menu funcional mockeado, sin red)
+# ---------------------------------------------------------------------------
+Write-Output ''
+Write-Output '--- Bloque 8: bootstrap.ps1 ---'
+$bootPath = Join-Path $RepoRoot 'bootstrap.ps1'
+Test-Assert (Test-Path $bootPath) 'bootstrap.ps1 existe'
+$bootErrs = $null; $bootToks = $null
+[void][System.Management.Automation.Language.Parser]::ParseFile($bootPath, [ref]$bootToks, [ref]$bootErrs)
+Test-Assert ($bootErrs.Count -eq 0) 'bootstrap.ps1 sintaxis OK'
+$boot = Get-Content $bootPath -Raw
+Test-Assert ($boot -match 'Major -lt 7') 'bootstrap.ps1 exige PowerShell 7'
+Test-Assert ($boot -match 'archive/refs/heads/' -and $boot -match '\$Branch') 'bootstrap.ps1 construye URL ZIP desde Branch'
+Test-Assert ($boot -match 'Verb RunAs') 'bootstrap.ps1 auto-eleva con UAC'
+Test-Assert ($boot -match "ValidateSet.*Base.*Dev.*Gaming.*All") 'bootstrap.ps1 valida Category'
+Test-Assert ($boot -match '-GitUserName' -and $boot -match '-GitUserEmail') 'bootstrap.ps1 pasa params Git'
+Test-Assert ($boot -match 'KeepDownload') 'bootstrap.ps1 soporta KeepDownload'
+$ps7Pos = $boot.IndexOf('Require PowerShell 7')
+$menuPos = $boot.IndexOf('$interactive')
+Test-Assert ($ps7Pos -ge 0 -and $menuPos -gt $ps7Pos) 'bootstrap.ps1 chequea PS7 antes del menu'
+$zipPos = $boot.IndexOf('$ZipUrl = "https://github.com')
+Test-Assert ($zipPos -ge 0 -and $zipPos -lt $menuPos) 'bootstrap.ps1 define ZipUrl antes del menu'
+Test-Assert ($boot.IndexOf('$WhatIfPreference') -lt $boot.IndexOf('Invoke-WebRequest -Uri')) 'bootstrap.ps1 WhatIf sale antes de descargar'
+Test-Assert ($boot -match 'function Show-Menu' -and $boot -match 'ReadKey') 'bootstrap.ps1 menu con flechas existe'
+Test-Assert ($boot -match 'function Show-NumberedMenu' -and $boot -match 'KeyAvailable') 'bootstrap.ps1 fallback numerado existe'
+Test-Assert ($boot -match 'PSBoundParameters') 'bootstrap.ps1 detecta modo interactivo sin params'
+Test-Assert ($boot -match 'selfPath' -and $boot -match 'bootstrap-iex\.ps1') 'bootstrap.ps1 elevacion funciona bajo iex'
+Test-Assert ($boot -match 'Could not download the app list') 'bootstrap.ps1 lista de apps con try/catch'
+Test-Assert ($boot -match '\$customApps' -and $boot -match 'Where-Object \{ \$customApps') 'bootstrap.ps1 filtra customApps en el ZIP'
+
+# Test funcional de Show-NumberedMenu extrayendo la funcion (Read-Host mockeado, sin consola)
+if ($boot -match '(?s)(function Show-NumberedMenu \{.*?\n\})\s*\$ZipUrl') {
+    $menuSb = [scriptblock]::Create($Matches[1])
+    . $menuSb
+    function Read-Host { param($Prompt) return '2' }
+    try {
+        $pick = Show-NumberedMenu -Title 'T' -Options @('A', 'B', 'C')
+        Test-Assert ($pick -eq 1) 'Menu numerado elige opcion 2 -> indice 1'
+    } catch {
+        Test-Assert $false 'Menu numerado seleccion simple' "$_"
+    }
+    function Read-Host { param($Prompt) return '1,3' }
+    try {
+        $picks = Show-NumberedMenu -Title 'T' -Options @('A', 'B', 'C') -Multi
+        Test-Assert (($picks.Count -eq 2) -and ($picks -contains 'A') -and ($picks -contains 'C')) 'Menu numerado multi marca 1,3 -> A,C'
+    } catch {
+        Test-Assert $false 'Menu numerado multi-seleccion' "$_"
+    }
+    Remove-Item function:\Read-Host -ErrorAction SilentlyContinue
+    Remove-Item function:\Show-NumberedMenu -ErrorAction SilentlyContinue
+} else {
+    Test-Assert $false 'Show-NumberedMenu extraible de bootstrap.ps1' ''
+}
+
 Write-Output ''
 Write-Output '=== RESUMEN ==='
 Write-Output "Total: $script:Total Pasados: $script:Passed Fallidos: $script:Failed"
