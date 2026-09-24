@@ -23,4 +23,35 @@ Describe 'bootstrap.ps1 online installer' {
         $script:Boot.IndexOf('$WhatIfPreference') | Should -BeGreaterThan -1
         $script:Boot.IndexOf('$WhatIfPreference') | Should -BeLessThan $script:Boot.IndexOf('Invoke-WebRequest -Uri')
     }
+    It 'Has arrow-key menu with numbered fallback' {
+        $script:Boot | Should -Match 'function Show-Menu'
+        $script:Boot | Should -Match 'ReadKey'
+        $script:Boot | Should -Match 'function Show-NumberedMenu'
+        $script:Boot | Should -Match 'KeyAvailable'
+    }
+    It 'Detects interactive mode and supports iex elevation' {
+        $script:Boot | Should -Match 'PSBoundParameters'
+        $script:Boot | Should -Match 'selfPath'
+        $script:Boot | Should -Match 'bootstrap-iex\.ps1'
+    }
+    It 'Filters custom apps into the extracted archive' {
+        $script:Boot | Should -Match '\$customApps'
+        $script:Boot | Should -Match 'Where-Object \{ \$customApps'
+    }
+    It 'Never closes an iex console (return instead of exit)' {
+        $script:Boot | Should -Match '\$isIex = \[string\]::IsNullOrWhiteSpace\(\$PSCommandPath\)'
+        $script:Boot | Should -Match 'if \(\$isIex\) \{ return \} else \{ exit'
+    }
+    It 'Supports SkipGit/SkipVSCode end to end' {
+        $script:Boot | Should -Match '\[switch\]\$SkipGit'
+        $script:Boot | Should -Match '\[switch\]\$SkipVSCode'
+        $script:Boot | Should -Match 'Skip VSCode configuration'
+        $script:Boot | Should -Match "\$elevArgs \+= '-SkipGit'"
+        $script:Boot | Should -Match "\$installArgs \+= '-SkipVSCode'"
+    }
+    It 'Elevation is visible (log + exit code, no literal quotes)' {
+        $script:Boot | Should -Match 'RedirectStandardOutput'
+        $script:Boot | Should -Match 'Elevated installer exited with code'
+        $script:Boot | Should -Not -Match '''"\$selfPath"'''
+    }
 }

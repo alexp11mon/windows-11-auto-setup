@@ -1,5 +1,5 @@
 # Instalador automático Windows 11 64-bit.
-# Uso: .\install.ps1 [-Category Base|Dev|Gaming|All] [-WhatIf] [-GitUserName "Nombre"] [-GitUserEmail "email@ejemplo.com"]
+# Uso: .\install.ps1 [-Category Base|Dev|Gaming|All] [-WhatIf] [-GitUserName "Nombre"] [-GitUserEmail "email@ejemplo.com"] [-SkipGit] [-SkipVSCode]
 # Requiere: Windows 11 64-bit, PowerShell 7, winget, ejecución como Administrador.
 [CmdletBinding(SupportsShouldProcess = $true)]
 param (
@@ -8,7 +8,11 @@ param (
 
     [string]$GitUserName = "",
 
-    [string]$GitUserEmail = ""
+    [string]$GitUserEmail = "",
+
+    [switch]$SkipGit,
+
+    [switch]$SkipVSCode
 )
 
 $RepoRoot = $PSScriptRoot
@@ -112,7 +116,11 @@ if (Test-Path $GitModulePath) {
     . $GitModulePath
 
     if ($Category -eq 'Dev' -or $Category -eq 'All') {
-        Invoke-GitConfig -UserName $GitUserName -UserEmail $GitUserEmail
+        if ($SkipGit) {
+            Write-InstallLog -Message "Configuracion de Git omitida por flag -SkipGit." -Level "INFO"
+        } else {
+            Invoke-GitConfig -UserName $GitUserName -UserEmail $GitUserEmail
+        }
     }
 } else {
     Write-InstallLog -Message "Modulo de configuracion de Git no encontrado en: $GitModulePath" -Level "WARNING"
@@ -124,7 +132,11 @@ if (Test-Path $VSCodeModulePath) {
     . $VSCodeModulePath
 
     if ($Category -eq 'Dev' -or $Category -eq 'All') {
-        Invoke-VSCodeConfig -ExtensionsConfigPath $ExtensionsConfigPath
+        if ($SkipVSCode) {
+            Write-InstallLog -Message "Configuracion de VSCode omitida por flag -SkipVSCode." -Level "INFO"
+        } else {
+            Invoke-VSCodeConfig -ExtensionsConfigPath $ExtensionsConfigPath
+        }
     }
 } else {
     Write-InstallLog -Message "Modulo de configuracion de VSCode no encontrado en: $VSCodeModulePath" -Level "WARNING"
