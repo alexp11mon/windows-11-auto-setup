@@ -4,7 +4,7 @@
 # Usage (PowerShell 7):
 #   .\bootstrap.ps1 [-Category Base|Dev|Gaming|All] [-WhatIf]
 #                   [-GitUserName "Name"] [-GitUserEmail "email@example.com"]
-#                   [-Branch "master"] [-KeepDownload]
+#                   [-SkipGit] [-SkipVSCode] [-Branch "master"] [-KeepDownload]
 # One-line interactive mode (no download, arrow-key menu):
 #   irm https://raw.githubusercontent.com/alexp11mon/windows-11-auto-setup/master/bootstrap.ps1 | iex
 # Remote two-line mode (no local clone needed):
@@ -23,7 +23,11 @@ param (
 
     [string]$Branch = "master",
 
-    [switch]$KeepDownload
+    [switch]$KeepDownload,
+
+    [switch]$SkipGit,
+
+    [switch]$SkipVSCode
 )
 
 # Under iex ($PSCommandPath is empty) plain exit would close the user's
@@ -145,8 +149,15 @@ if ($interactive) {
     if ($gitChoice -eq 0) {
         $GitUserName = Read-Host "Enter your user name for Git"
         $GitUserEmail = Read-Host "Enter your email address for Git"
+    } else {
+        $SkipGit = $true
     }
-    $confirm = Invoke-Menu -Title "Ready: Category=$Category Apps=$(if ($customApps.Count) { $customApps.Count } else { 'all' }) Git=$(if ($gitChoice -eq 0) { $GitUserName } else { 'skipped' })" -Options @('Install now', 'Simulate first (-WhatIf)', 'Cancel')
+    $codeChoice = Invoke-Menu -Title "VSCode configuration?" -Options @('Install extensions', 'Skip VSCode configuration')
+    if ($null -eq $codeChoice) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
+    if ($codeChoice -eq 1) {
+        $SkipVSCode = $true
+    }
+    $confirm = Invoke-Menu -Title "Ready: Category=$Category Apps=$(if ($customApps.Count) { $customApps.Count } else { 'all' }) Git=$(if ($SkipGit) { 'skipped' } else { $GitUserName }) VSCode=$(if ($SkipVSCode) { 'skipped' } else { 'extensions' })" -Options @('Install now', 'Simulate first (-WhatIf)', 'Cancel')
     if ($null -eq $confirm -or $confirm -eq 2) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
     if ($confirm -eq 1) {
         Write-Host "Would download: $ZipUrl" -ForegroundColor Cyan
@@ -178,6 +189,8 @@ if (-not $isAdmin) {
     if (-not [string]::IsNullOrWhiteSpace($GitUserName)) { $elevArgs += @('-GitUserName', "`"$GitUserName`"") }
     if (-not [string]::IsNullOrWhiteSpace($GitUserEmail)) { $elevArgs += @('-GitUserEmail', "`"$GitUserEmail`"") }
     if ($KeepDownload) { $elevArgs += '-KeepDownload' }
+    if ($SkipGit) { $elevArgs += '-SkipGit' }
+    if ($SkipVSCode) { $elevArgs += '-SkipVSCode' }
     try {
         $child = Start-Process -FilePath "pwsh" -ArgumentList $elevArgs -Verb RunAs -Wait -PassThru
         $global:LASTEXITCODE = $child.ExitCode; if ($isIex) { return } else { exit $child.ExitCode }
@@ -246,6 +259,8 @@ Write-Host "Running: $($installScript.FullName) -Category $Category" -Foreground
 $installArgs = @('-NoProfile', '-File', "`"$($installScript.FullName)`"", '-Category', $Category)
 if (-not [string]::IsNullOrWhiteSpace($GitUserName)) { $installArgs += @('-GitUserName', "`"$GitUserName`"") }
 if (-not [string]::IsNullOrWhiteSpace($GitUserEmail)) { $installArgs += @('-GitUserEmail', "`"$GitUserEmail`"") }
+if ($SkipGit) { $installArgs += '-SkipGit' }
+if ($SkipVSCode) { $installArgs += '-SkipVSCode' }
 $proc = Start-Process -FilePath "pwsh" -ArgumentList $installArgs -Wait -PassThru -NoNewWindow
 $installExit = $proc.ExitCode
 

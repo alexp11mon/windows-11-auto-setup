@@ -28,6 +28,12 @@ Describe 'install.ps1 entry guards' {
         $script:Entry | Should -Match 'GitUserEmail'
         $script:Entry | Should -Match 'Invoke-GitConfig -UserName'
     }
+    It 'Omite Git/VSCode con switches sin preguntar' {
+        $script:Entry | Should -Match '\[switch\]\$SkipGit'
+        $script:Entry | Should -Match '\[switch\]\$SkipVSCode'
+        $script:Entry | Should -Match 'omitida por flag -SkipGit'
+        $script:Entry | Should -Match 'omitida por flag -SkipVSCode'
+    }
     It 'Propaga errores con InstallHadErrors y exit 1' {
         $script:Entry | Should -Match 'InstallHadErrors'
     }

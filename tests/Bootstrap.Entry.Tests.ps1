@@ -42,4 +42,11 @@ Describe 'bootstrap.ps1 online installer' {
         $script:Boot | Should -Match '\$isIex = \[string\]::IsNullOrWhiteSpace\(\$PSCommandPath\)'
         $script:Boot | Should -Match 'if \(\$isIex\) \{ return \} else \{ exit'
     }
+    It 'Supports SkipGit/SkipVSCode end to end' {
+        $script:Boot | Should -Match '\[switch\]\$SkipGit'
+        $script:Boot | Should -Match '\[switch\]\$SkipVSCode'
+        $script:Boot | Should -Match 'Skip VSCode configuration'
+        $script:Boot | Should -Match "\$elevArgs \+= '-SkipGit'"
+        $script:Boot | Should -Match "\$installArgs \+= '-SkipVSCode'"
+    }
 }

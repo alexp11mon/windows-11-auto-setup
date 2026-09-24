@@ -129,7 +129,7 @@ Con `Dev` o `All` además se aplica configuración de Git (`user.name`, `user.em
 ## Tests (no instalan nada, todo mockeado)
 
 ```powershell
-# Suite principal sin dependencias (95 checks)
+# Suite principal sin dependencias (102 checks)
 pwsh -NoProfile -File tests/Runner-Mock.ps1
 
 # Tests Pester 5 (requiere Install-Module Pester -MinimumVersion 5.0)
@@ -139,7 +139,7 @@ Invoke-Pester -Path ./tests -Output Detailed
 ## Notas
 
 - La configuración de Git y VSCode solo se aplica con `-Category Dev` o `-Category All`.
-- Git es interactivo por defecto (pregunta nombre/email). Pásalos con `-GitUserName`/`-GitUserEmail` para automatizar, o usa `-WhatIf` (no pregunta nada en simulación).
+- Git es interactivo por defecto (pregunta nombre/email). Pásalos con `-GitUserName`/`-GitUserEmail` para automatizar, omítelo con `-SkipGit` (igual `-SkipVSCode` para extensiones), o usa `-WhatIf` (no pregunta nada en simulación). El menú en línea ofrece ambas omisiones.
 - Cada ejecución genera un log fechado en `logs/install-YYYYMMDD-HHmmss.log` (`*.log` están ignorados por git).
 - La instalación es idempotente: lo ya instalado se omite y el script puede re-ejecutarse.
 - Tras instalar apps en la misma ejecución, el script refresca el `PATH` de la sesión (proceso + Machine + User, sin duplicados) para detectar `git`/`code` sin reiniciar. Si aun así su configuración se omite, abre una terminal nueva y re-ejecuta.
@@ -148,8 +148,8 @@ Invoke-Pester -Path ./tests -Output Detailed
 
 ## Estructura
 
-- `install.ps1`: punto de entrada. Chequea administrador, Windows 11 64-bit y winget. Flags `-Category` (`Base`, `Dev`, `Gaming`, `All`), `-GitUserName`/`-GitUserEmail` y `-WhatIf`. Marca `exit 1` si hubo algún `ERROR`.
-- `bootstrap.ps1`: instalación en línea. Descarga el ZIP de GitHub, se auto-eleva a admin y ejecuta `install.ps1` con los mismos flags más `-Branch` y `-KeepDownload`.
+- `install.ps1`: punto de entrada. Chequea administrador, Windows 11 64-bit y winget. Flags `-Category` (`Base`, `Dev`, `Gaming`, `All`), `-GitUserName`/`-GitUserEmail`, `-SkipGit`/`-SkipVSCode` y `-WhatIf`. Marca `exit 1` si hubo algún `ERROR`.
+- `bootstrap.ps1`: instalación en línea. Descarga el ZIP de GitHub, se auto-eleva a admin y ejecuta `install.ps1` con los mismos flags más `-Branch` y `-KeepDownload`. Sin parámetros abre menú con flechas (alcance, personalizado, Git, VSCode, confirmación).
 - `config/apps.json`: lista de apps winget por categoría (`Base`, `Dev`, `Gaming`).
 - `config/vscode/extensions.json`: extensiones de VSCode a instalar.
 - `config/git/`: reservado para futura configuración de Git por fichero (hoy la config es interactiva vía `Config-Git.ps1` o por parámetros).
@@ -165,7 +165,8 @@ Invoke-Pester -Path ./tests -Output Detailed
 | En `cmd`, `.\install.ps1 ...` "no hace nada" | Esa sintaxis es de PowerShell, no de `cmd` | Abre `pwsh` como admin, o desde `cmd`: `pwsh -File install.ps1 -Category All -WhatIf` |
 | Aborto "exclusivamente para Windows 11 de 64 bits" en un Win11 válido | Comparación contra texto localizado (p. ej. `64 bits` en español) | Corregido: actualiza el script; el mensaje ahora muestra los valores detectados |
 | La config de Git/VSCode se omite justo tras instalarlos | El `PATH` de la sesión aún no los incluye | El script lo refresca solo; si persiste, nueva terminal y re-ejecutar |
-| Pide nombre/email de Git y se queda parado | `Config-Git.ps1` es interactivo | Introduce los datos, o pásalos por parámetro: `-GitUserName "Tu Nombre" -GitUserEmail "tu@email.com"` |
+| Pide nombre/email de Git y se queda parado | `Config-Git.ps1` es interactivo | Introduce los datos, pásalos por parámetro (`-GitUserName "Tu Nombre" -GitUserEmail "tu@email.com"`), u omite la config con `-SkipGit` (igual `-SkipVSCode`) |
+| Spotify falla con código `-1978335146` ("no se puede ejecutar desde un contexto de administrador") | Su instalador es por-usuario y rechaza la sesión elevada | El script continúa con el resto y sale con `1`. Instala Spotify por separado sin elevar: `winget install --id Spotify.Spotify`. Otras apps por-usuario (p. ej. Discord) pueden comportarse igual |
 
 ## Créditos
 

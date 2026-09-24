@@ -344,6 +344,9 @@ Test-Assert ($entry -match 'Update-SessionPath') 'install.ps1 refresca PATH tras
 Test-Assert ($entry -match "Category.*Dev.*or.*All") 'Git/VSCode solo con Dev o All'
 Test-Assert ($entry -match 'GitUserName' -and $entry -match 'GitUserEmail') 'install.ps1 acepta GitUserName/GitUserEmail'
 Test-Assert ($entry -match 'Invoke-GitConfig -UserName') 'install.ps1 pasa params a Invoke-GitConfig'
+Test-Assert ($entry -match '\[switch\]\$SkipGit' -and $entry -match '\[switch\]\$SkipVSCode') 'install.ps1 acepta switches SkipGit/SkipVSCode'
+Test-Assert ($entry -match 'omitida por flag -SkipGit') 'install.ps1 omite Git con SkipGit sin preguntar'
+Test-Assert ($entry -match 'omitida por flag -SkipVSCode') 'install.ps1 omite VSCode con SkipVSCode'
 Test-Assert ($entry -match 'InstallHadErrors') 'install.ps1 propaga errores con exit code'
 
 # Logica Win11 replicada con valores reales (solo lectura)
@@ -419,6 +422,10 @@ Test-Assert ($boot -match '\$isIex = \[string\]::IsNullOrWhiteSpace\(\$PSCommand
 $bareExits = ([regex]::Matches($boot, '(?m)^\s*exit\b')).Count
 Test-Assert ($bareExits -eq 0) "bootstrap.ps1 sin exit pelados (todos con if isIex, encontrados=$bareExits)"
 Test-Assert (([regex]::Matches($boot, 'if \(\$isIex\) \{ return \} else \{ exit')).Count -ge 10) 'bootstrap.ps1 patron return-iex en todas las salidas'
+Test-Assert ($boot -match '\[switch\]\$SkipGit' -and $boot -match '\[switch\]\$SkipVSCode') 'bootstrap.ps1 acepta switches SkipGit/SkipVSCode'
+Test-Assert ($boot -match "Skip VSCode configuration") 'bootstrap.ps1 menu pregunta por VSCode'
+Test-Assert (($boot -match "\$elevArgs \+= '-SkipGit'") -and ($boot -match "\$installArgs \+= '-SkipGit'")) 'bootstrap.ps1 propaga SkipGit al elevar y al instalar'
+Test-Assert (($boot -match "\$elevArgs \+= '-SkipVSCode'") -and ($boot -match "\$installArgs \+= '-SkipVSCode'")) 'bootstrap.ps1 propaga SkipVSCode al elevar y al instalar'
 
 # Test funcional de Show-NumberedMenu extrayendo la funcion (Read-Host mockeado, sin consola)
 if ($boot -match '(?s)(function Show-NumberedMenu \{.*?\n\})\s*\$ZipUrl') {
