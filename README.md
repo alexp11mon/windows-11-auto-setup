@@ -43,6 +43,8 @@ Invoke-WebRequest https://raw.githubusercontent.com/alexp11mon/windows-11-auto-s
 Notas:
 
 - Descarga el ZIP de la rama `master` por defecto (`-Branch` para cambiarla), lo extrae en `%TEMP%\win11-setup-*`, ejecuta `install.ps1` y borra lo descargado (usa `-KeepDownload` para conservarlo).
+- El lanzador y el ZIP deben ir a la par: si pruebas una rama (`-Branch mi-rama`), descarga el `bootstrap.ps1` de esa misma rama, o el `install.ps1` descargado puede no aceptar los flags nuevos.
+- Si la elevación UAC falla en silencio, revisa el log `%TEMP%\win11-setup-elevated-*.log`: el exit code siempre se imprime.
 
 ### Local (clonando el repo)
 

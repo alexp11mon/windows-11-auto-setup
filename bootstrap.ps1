@@ -185,14 +185,20 @@ if (-not $isAdmin) {
         $selfPath = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "bootstrap-iex.ps1"
         $MyInvocation.MyCommand.ScriptBlock.ToString() | Set-Content -Path $selfPath -Encoding UTF8
     }
-    $elevArgs = @('-NoProfile', '-File', "`"$selfPath`"", '-Category', $Category, '-Repo', $Repo, '-Branch', $Branch)
-    if (-not [string]::IsNullOrWhiteSpace($GitUserName)) { $elevArgs += @('-GitUserName', "`"$GitUserName`"") }
-    if (-not [string]::IsNullOrWhiteSpace($GitUserEmail)) { $elevArgs += @('-GitUserEmail', "`"$GitUserEmail`"") }
+    $elevArgs = @('-NoProfile', '-File', $selfPath, '-Category', $Category, '-Repo', $Repo, '-Branch', $Branch)
+    if (-not [string]::IsNullOrWhiteSpace($GitUserName)) { $elevArgs += @('-GitUserName', $GitUserName) }
+    if (-not [string]::IsNullOrWhiteSpace($GitUserEmail)) { $elevArgs += @('-GitUserEmail', $GitUserEmail) }
     if ($KeepDownload) { $elevArgs += '-KeepDownload' }
     if ($SkipGit) { $elevArgs += '-SkipGit' }
     if ($SkipVSCode) { $elevArgs += '-SkipVSCode' }
+    # The elevated child runs in its own window: capture its output so failures are visible here.
+    $elevLog = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ("win11-setup-elevated-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
     try {
-        $child = Start-Process -FilePath "pwsh" -ArgumentList $elevArgs -Verb RunAs -Wait -PassThru
+        $child = Start-Process -FilePath "pwsh" -ArgumentList $elevArgs -Verb RunAs -Wait -PassThru -RedirectStandardOutput $elevLog -RedirectStandardError "$elevLog.err"
+        Write-Host "Elevated installer exited with code: $($child.ExitCode) (log: $elevLog)" -ForegroundColor Cyan
+        if ($child.ExitCode -ne 0) {
+            Get-Content -Path $elevLog -Tail 20 -ErrorAction SilentlyContinue
+        }
         $global:LASTEXITCODE = $child.ExitCode; if ($isIex) { return } else { exit $child.ExitCode }
     } catch {
         Write-Error "Elevation failed or was cancelled: $_"
@@ -256,9 +262,9 @@ if ($customApps -and $customApps.Count -gt 0) {
 Write-Host "Running: $($installScript.FullName) -Category $Category" -ForegroundColor Green
 
 # 6. Run the installer and propagate its exit code
-$installArgs = @('-NoProfile', '-File', "`"$($installScript.FullName)`"", '-Category', $Category)
-if (-not [string]::IsNullOrWhiteSpace($GitUserName)) { $installArgs += @('-GitUserName', "`"$GitUserName`"") }
-if (-not [string]::IsNullOrWhiteSpace($GitUserEmail)) { $installArgs += @('-GitUserEmail', "`"$GitUserEmail`"") }
+$installArgs = @('-NoProfile', '-File', $installScript.FullName, '-Category', $Category)
+if (-not [string]::IsNullOrWhiteSpace($GitUserName)) { $installArgs += @('-GitUserName', $GitUserName) }
+if (-not [string]::IsNullOrWhiteSpace($GitUserEmail)) { $installArgs += @('-GitUserEmail', $GitUserEmail) }
 if ($SkipGit) { $installArgs += '-SkipGit' }
 if ($SkipVSCode) { $installArgs += '-SkipVSCode' }
 $proc = Start-Process -FilePath "pwsh" -ArgumentList $installArgs -Wait -PassThru -NoNewWindow

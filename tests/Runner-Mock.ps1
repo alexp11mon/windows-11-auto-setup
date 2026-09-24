@@ -425,6 +425,8 @@ Test-Assert (([regex]::Matches($boot, 'if \(\$isIex\) \{ return \} else \{ exit'
 Test-Assert ($boot -match '\[switch\]\$SkipGit' -and $boot -match '\[switch\]\$SkipVSCode') 'bootstrap.ps1 acepta switches SkipGit/SkipVSCode'
 Test-Assert ($boot -match "Skip VSCode configuration") 'bootstrap.ps1 menu pregunta por VSCode'
 Test-Assert (($boot -match "\$elevArgs \+= '-SkipGit'") -and ($boot -match "\$installArgs \+= '-SkipGit'")) 'bootstrap.ps1 propaga SkipGit al elevar y al instalar'
+Test-Assert ($boot -match 'RedirectStandardOutput' -and $boot -match 'Elevated installer exited with code') 'bootstrap.ps1 elevacion con log visible y exit code'
+Test-Assert ($boot -notmatch '''"\$selfPath"''' -and $boot -notmatch '''"\$\(\$installScript') 'bootstrap.ps1 sin comillas literales en ArgumentList'
 Test-Assert (($boot -match "\$elevArgs \+= '-SkipVSCode'") -and ($boot -match "\$installArgs \+= '-SkipVSCode'")) 'bootstrap.ps1 propaga SkipVSCode al elevar y al instalar'
 
 # Test funcional de Show-NumberedMenu extrayendo la funcion (Read-Host mockeado, sin consola)

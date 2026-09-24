@@ -49,4 +49,9 @@ Describe 'bootstrap.ps1 online installer' {
         $script:Boot | Should -Match "\$elevArgs \+= '-SkipGit'"
         $script:Boot | Should -Match "\$installArgs \+= '-SkipVSCode'"
     }
+    It 'Elevation is visible (log + exit code, no literal quotes)' {
+        $script:Boot | Should -Match 'RedirectStandardOutput'
+        $script:Boot | Should -Match 'Elevated installer exited with code'
+        $script:Boot | Should -Not -Match '''"\$selfPath"'''
+    }
 }
