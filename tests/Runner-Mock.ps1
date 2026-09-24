@@ -60,7 +60,7 @@ try {
     $apps = Get-Content $AppsConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
     Test-Assert ($null -ne $apps.Base -and $null -ne $apps.Dev -and $null -ne $apps.Gaming) 'apps.json tiene Base/Dev/Gaming'
     $all = @($apps.Base) + @($apps.Dev) + @($apps.Gaming)
-    Test-Assert ($all.Count -eq 14) "apps.json total=14 (real=$($all.Count))"
+    Test-Assert ($all.Count -eq 16) "apps.json total=16 (real=$($all.Count))"
     Test-Assert ((($all | Sort-Object -Unique).Count) -eq $all.Count) 'apps.json sin duplicados'
 } catch {
     Test-Assert $false 'apps.json valido' "$_"
@@ -185,12 +185,19 @@ function Install-WingetApp {
 }
 Reset-Capture
 Invoke-InstallCategory -Category 'Base' -AppsConfigPath $AppsConfigPath
-Test-Assert ($global:SpyInstalled.Count -eq 4) "Category Base instala 4 (real=$($global:SpyInstalled.Count))"
+Test-Assert ($global:SpyInstalled.Count -eq 6) "Category Base instala 6 (real=$($global:SpyInstalled.Count))"
 Test-Assert ($global:SpyInstalled -contains 'Brave.Brave') 'Base contiene Brave.Brave'
+Test-Assert ($global:SpyInstalled -contains 'Obsidian.Obsidian') 'Base contiene Obsidian.Obsidian'
+Test-Assert ($global:SpyInstalled -contains 'Spotify.Spotify') 'Base contiene Spotify.Spotify'
+
+$global:SpyInstalled = @()
+Invoke-InstallCategory -Category 'Gaming' -AppsConfigPath $AppsConfigPath
+Test-Assert ($global:SpyInstalled.Count -eq 4) "Category Gaming instala 4 (real=$($global:SpyInstalled.Count))"
+Test-Assert ($global:SpyInstalled -contains 'Discord.Discord') 'Gaming contiene Discord.Discord'
 
 $global:SpyInstalled = @()
 Invoke-InstallCategory -Category 'All' -AppsConfigPath $AppsConfigPath
-Test-Assert ($global:SpyInstalled.Count -eq 14) "Category All expande a 14 (real=$($global:SpyInstalled.Count))"
+Test-Assert ($global:SpyInstalled.Count -eq 16) "Category All expande a 16 (real=$($global:SpyInstalled.Count))"
 
 # Fichero inexistente => ERROR y return sin excepcion
 Reset-Capture

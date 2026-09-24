@@ -6,14 +6,19 @@ BeforeAll {
     $script:Apps = Join-Path $RepoRoot 'config/apps.json'
 }
 Describe 'Install-Category' {
-    It 'All expande a 14 apps (4+7+3)' {
+    It 'All expande a 16 apps (6+6+4)' {
         Mock Install-WingetApp { }
         Invoke-InstallCategory -Category 'All' -AppsConfigPath $script:Apps
-        Should -Invoke Install-WingetApp -Times 14 -Exactly
+        Should -Invoke Install-WingetApp -Times 16 -Exactly
     }
-    It 'Base instala 4' {
+    It 'Base instala 6' {
         Mock Install-WingetApp { }
         Invoke-InstallCategory -Category 'Base' -AppsConfigPath $script:Apps
+        Should -Invoke Install-WingetApp -Times 6 -Exactly
+    }
+    It 'Gaming instala 4' {
+        Mock Install-WingetApp { }
+        Invoke-InstallCategory -Category 'Gaming' -AppsConfigPath $script:Apps
         Should -Invoke Install-WingetApp -Times 4 -Exactly
     }
     It 'Fichero inexistente loguea ERROR sin lanzar' {

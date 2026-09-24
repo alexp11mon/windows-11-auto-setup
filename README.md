@@ -10,10 +10,34 @@ Configurador automático de PC nuevo con Windows 11 64-bit: instala apps con win
   winget install --id Microsoft.PowerShell --exact --accept-source-agreements --accept-package-agreements
   ```
 - `winget` (App Installer desde Microsoft Store).
-- Ejecutar como **Administrador**.
+- Ejecutar como **Administrador** (el método en línea se auto-eleva solo).
 - Probar primero en máquina virtual o PC secundario.
 
-## Uso
+## Instalación
+
+### En línea (sin clonar, recomendado)
+
+Desde PowerShell 7 (**no** hace falta abrirlo como admin: `bootstrap.ps1` se auto-eleva solo):
+
+```powershell
+# 1. Descargar el lanzador
+Invoke-WebRequest https://raw.githubusercontent.com/alexp11mon/windows-11-auto-setup/master/bootstrap.ps1 -OutFile bootstrap.ps1
+
+# 2a. Simular primero (recomendado)
+.\bootstrap.ps1 -Category All -WhatIf
+
+# 2b. Instalación completa
+.\bootstrap.ps1 -Category All
+
+# 2c. Con Git no interactivo
+.\bootstrap.ps1 -Category Dev -GitUserName "Tu Nombre" -GitUserEmail "tu@email.com"
+```
+
+Notas:
+
+- Descarga el ZIP de la rama `master` por defecto (`-Branch` para cambiarla), lo extrae en `%TEMP%\win11-setup-*`, ejecuta `install.ps1` y borra lo descargado (usa `-KeepDownload` para conservarlo).
+
+### Local (clonando el repo)
 
 Desde PowerShell 7 abierto como Administrador:
 
@@ -38,22 +62,74 @@ cd "C:\ruta\al\proyecto\Instalador"
 .\install.ps1 -Category All -GitUserName "Tu Nombre" -GitUserEmail "tu@email.com" -WhatIf
 ```
 
-Códigos de salida:
+### Códigos de salida (ambos métodos)
 
 - `0` = todo correcto.
-- `1` = falta Admin, SO no compatible, falta winget/módulo, o hubo errores de instalación/configuración (revisa `logs/`).
+- `1` = falta Admin, SO no compatible, falta winget/módulo, o hubo errores de instalación/configuración (revisa `logs/`). El `exit code` de `bootstrap.ps1` es el de `install.ps1`.
 
-Tests (no instalan nada, todo mockeado):
+## Programas por defecto
+
+Con `-Category All` se instala todo lo siguiente. Con `-Category Base|Dev|Gaming` solo su bloque.
+
+### Base (uso diario)
+
+| Programa | ID winget |
+|---|---|
+| Brave | `Brave.Brave` |
+| WinRAR | `RARLab.WinRAR` |
+| Revo Uninstaller | `RevoUninstaller.RevoUninstaller` |
+| WizTree | `AntibodySoftware.WizTree` |
+| Obsidian | `Obsidian.Obsidian` |
+| Spotify | `Spotify.Spotify` |
+
+### Dev (desarrollo)
+
+| Programa | ID winget |
+|---|---|
+| Visual Studio Code | `Microsoft.VisualStudioCode` |
+| Git | `Git.Git` |
+| GitKraken | `Axosoft.GitKraken` |
+| PowerShell 7 | `Microsoft.PowerShell` |
+| Windows Terminal | `Microsoft.WindowsTerminal` |
+| Warp | `Warp.Warp` |
+
+Con `Dev` o `All` además se aplica configuración de Git (`user.name`, `user.email`, `init.defaultBranch=main` y alias `tree`) y se instalan las extensiones de VSCode.
+
+### Gaming
+
+| Programa | ID winget |
+|---|---|
+| Steam | `Valve.Steam` |
+| Epic Games Launcher | `EpicGames.EpicGamesLauncher` |
+| Prism Launcher | `PrismLauncher.PrismLauncher` |
+| Discord | `Discord.Discord` |
+
+### Extensiones de VSCode (10)
+
+| Extensión | ID |
+|---|---|
+| C/C++ Extension Pack | `ms-vscode.cpptools-extension-pack` |
+| CMake Tools | `ms-vscode.cmake-tools` |
+| HTML5 Boilerplate | `sidthesloth.html5-boilerplate` |
+| HTML CSS Support | `ecmel.vscode-html-css` |
+| Markdown All in One | `yzhang.markdown-all-in-one` |
+| PowerShell | `ms-vscode.powershell` |
+| Pylance | `ms-python.vscode-pylance` |
+| Python | `ms-python.python` |
+| Python Debugger | `ms-python.debugpy` |
+| Python Envs | `ms-python.vscode-python-envs` |
+
+## Tests (no instalan nada, todo mockeado)
 
 ```powershell
-# Suite principal sin dependencias (69 checks)
+# Suite principal sin dependencias (78 checks)
 pwsh -NoProfile -File tests/Runner-Mock.ps1
 
 # Tests Pester 5 (requiere Install-Module Pester -MinimumVersion 5.0)
 Invoke-Pester -Path ./tests -Output Detailed
 ```
 
-Notas:
+## Notas
 
 - La configuración de Git y VSCode solo se aplica con `-Category Dev` o `-Category All`.
 - Git es interactivo por defecto (pregunta nombre/email). Pásalos con `-GitUserName`/`-GitUserEmail` para automatizar, o usa `-WhatIf` (no pregunta nada en simulación).
@@ -83,29 +159,6 @@ Notas:
 | Aborto "exclusivamente para Windows 11 de 64 bits" en un Win11 válido | Comparación contra texto localizado (p. ej. `64 bits` en español) | Corregido: actualiza el script; el mensaje ahora muestra los valores detectados |
 | La config de Git/VSCode se omite justo tras instalarlos | El `PATH` de la sesión aún no los incluye | El script lo refresca solo; si persiste, nueva terminal y re-ejecutar |
 | Pide nombre/email de Git y se queda parado | `Config-Git.ps1` es interactivo | Introduce los datos, o pásalos por parámetro: `-GitUserName "Tu Nombre" -GitUserEmail "tu@email.com"` |
-
-## Instalación en línea (sin clonar)
-
-Desde PowerShell 7 (**no** hace falta abrirlo como admin: `bootstrap.ps1` se auto-eleva solo):
-
-```powershell
-# 1. Descargar el lanzador
-Invoke-WebRequest https://raw.githubusercontent.com/alexp11mon/windows-11-auto-setup/master/bootstrap.ps1 -OutFile bootstrap.ps1
-
-# 2a. Simular primero (recomendado)
-.\bootstrap.ps1 -Category All -WhatIf
-
-# 2b. Instalación completa
-.\bootstrap.ps1 -Category All
-
-# 2c. Con Git no interactivo
-.\bootstrap.ps1 -Category Dev -GitUserName "Tu Nombre" -GitUserEmail "tu@email.com"
-```
-
-Notas:
-
-- Descarga el ZIP de la rama `master` por defecto (`-Branch` para cambiarla), lo extrae en `%TEMP%\win11-setup-*`, ejecuta `install.ps1` y borra lo descargado (usa `-KeepDownload` para conservarlo).
-- El `exit code` final es el de `install.ps1` (`0` ok, `1` error).
 
 ## Créditos
 
