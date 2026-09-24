@@ -54,7 +54,7 @@ Funciones PowerShell:
 - `Config-VSCode.ps1`: `Invoke-VSCodeConfig -ExtensionsConfigPath`; instala extensiones ausentes con `code --install-extension` y verifica el resultado.
 
 ### `tests/`
-Suite mockeada sin dependencias (`Runner-Mock.ps1`, 92 checks: sintaxis, JSON, winget/Git/VSCode con mocks, guards del entry, bootstrap y menú) + tests Pester 5 por módulo (`Common`, `Install-Category`, `Config-Git`, `Config-VSCode`, `Install.Entry`, `Bootstrap.Entry`). No instalan nada. Requieren Pester 5 solo para los `*.Tests.ps1`.
+Suite mockeada sin dependencias (`Runner-Mock.ps1`, 95 checks: sintaxis, JSON, winget/Git/VSCode con mocks, guards del entry, bootstrap y menú) + tests Pester 5 por módulo (`Common`, `Install-Category`, `Config-Git`, `Config-VSCode`, `Install.Entry`, `Bootstrap.Entry`). No instalan nada. Requieren Pester 5 solo para los `*.Tests.ps1`.
 
 ### `logs/`
 Un `.log` fechado por ejecución (`install-YYYYMMDD-HHmmss.log`). Qué fue instalado y qué falló. Los `*.log` están ignorados por git; la carpeta se conserva con `.gitkeep`.
@@ -68,7 +68,7 @@ Notas del proyecto. Incluye este archivo.
 Punto de entrada. Chequea administrador (sale con código 1 si falta), Windows 11 64-bit de SO (Build >= 22000 y `OSArchitecture`), y winget disponible. Resuelve rutas con `Join-Path`, refresca el `PATH` de la sesión (proceso + Machine + User, sin duplicados) tras instalar para detectar `git`/`code` sin reiniciar, y propaga `-WhatIf`. Flags: `-Category (Base, Dev, Gaming, All)`, `-GitUserName`/`-GitUserEmail` y `-WhatIf`. La config de Git/VSCode solo corre con `Dev` o `All`. Sale con `1` si hubo algún `ERROR`.
 
 ### `bootstrap.ps1`
-Instalación en línea sin clonar. Descarga el ZIP de GitHub (`$Repo`/`$Branch`), se auto-eleva a admin con UAC, lo extrae en `%TEMP%`, ejecuta `install.ps1` con `-Category`/`-GitUserName`/`-GitUserEmail`/`-WhatIf` y propaga su `exit code`. Limpia lo descargado salvo `-KeepDownload`. En `-WhatIf` solo describe lo que haría. Sin parámetros abre un menú interactivo con flechas (`Show-Menu`, con fallback numerado `Show-NumberedMenu`): alcance, personalizado por app (filtra el `apps.json` extraído), Git (pedir datos u omitir) y confirmación. Bajo `iex` se auto-guarda en `%TEMP%` para poder elevarse.
+Instalación en línea sin clonar. Descarga el ZIP de GitHub (`$Repo`/`$Branch`), se auto-eleva a admin con UAC, lo extrae en `%TEMP%`, ejecuta `install.ps1` con `-Category`/`-GitUserName`/`-GitUserEmail`/`-WhatIf` y propaga su `exit code`. Limpia lo descargado salvo `-KeepDownload`. En `-WhatIf` solo describe lo que haría. Sin parámetros abre un menú interactivo con flechas (`Show-Menu`, con fallback numerado `Show-NumberedMenu`): alcance, personalizado por app (filtra el `apps.json` extraído), Git (pedir datos u omitir) y confirmación. Bajo `iex` se auto-guarda en `%TEMP%` para poder elevarse, y ninguna salida cierra la consola (`return` + `$LASTEXITCODE` en vez de `exit`).
 
 ### `.gitignore`
 Ignora `logs/*.log` y temporales de Windows y VSCode. Conserva carpetas vacías con `.gitkeep`.

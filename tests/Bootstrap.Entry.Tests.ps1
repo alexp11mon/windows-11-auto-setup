@@ -38,4 +38,8 @@ Describe 'bootstrap.ps1 online installer' {
         $script:Boot | Should -Match '\$customApps'
         $script:Boot | Should -Match 'Where-Object \{ \$customApps'
     }
+    It 'Never closes an iex console (return instead of exit)' {
+        $script:Boot | Should -Match '\$isIex = \[string\]::IsNullOrWhiteSpace\(\$PSCommandPath\)'
+        $script:Boot | Should -Match 'if \(\$isIex\) \{ return \} else \{ exit'
+    }
 }

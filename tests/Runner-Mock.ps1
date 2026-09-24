@@ -415,6 +415,10 @@ Test-Assert ($boot -match 'PSBoundParameters') 'bootstrap.ps1 detecta modo inter
 Test-Assert ($boot -match 'selfPath' -and $boot -match 'bootstrap-iex\.ps1') 'bootstrap.ps1 elevacion funciona bajo iex'
 Test-Assert ($boot -match 'Could not download the app list') 'bootstrap.ps1 lista de apps con try/catch'
 Test-Assert ($boot -match '\$customApps' -and $boot -match 'Where-Object \{ \$customApps') 'bootstrap.ps1 filtra customApps en el ZIP'
+Test-Assert ($boot -match '\$isIex = \[string\]::IsNullOrWhiteSpace\(\$PSCommandPath\)') 'bootstrap.ps1 detecta modo iex'
+$bareExits = ([regex]::Matches($boot, '(?m)^\s*exit\b')).Count
+Test-Assert ($bareExits -eq 0) "bootstrap.ps1 sin exit pelados (todos con if isIex, encontrados=$bareExits)"
+Test-Assert (([regex]::Matches($boot, 'if \(\$isIex\) \{ return \} else \{ exit')).Count -ge 10) 'bootstrap.ps1 patron return-iex en todas las salidas'
 
 # Test funcional de Show-NumberedMenu extrayendo la funcion (Read-Host mockeado, sin consola)
 if ($boot -match '(?s)(function Show-NumberedMenu \{.*?\n\})\s*\$ZipUrl') {

@@ -26,6 +26,10 @@ param (
     [switch]$KeepDownload
 )
 
+# Under iex ($PSCommandPath is empty) plain exit would close the user's
+# console, so every exit below returns instead and leaves $LASTEXITCODE set.
+$isIex = [string]::IsNullOrWhiteSpace($PSCommandPath)
+
 function Show-Menu {
     param (
         [string]$Title,
@@ -98,7 +102,7 @@ $ZipUrl = "https://github.com/$Repo/archive/refs/heads/$Branch.zip"
 # 1. Require PowerShell 7
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     Write-Error "PowerShell 7 (pwsh) is required to run the online installer. Install it with: winget install --id Microsoft.PowerShell --exact --accept-source-agreements --accept-package-agreements"
-    exit 1
+    $global:LASTEXITCODE = 1; if ($isIex) { return } else { exit 1 }
 }
 
 $menuFallback = $false
@@ -119,7 +123,7 @@ $interactive = ($PSBoundParameters.Count -eq 0) -and [Environment]::UserInteract
 
 if ($interactive) {
     $scope = Invoke-Menu -Title "What do you want to install?" -Options @('All', 'Base', 'Dev', 'Gaming', 'Custom per-app')
-    if ($null -eq $scope) { Write-Host "Cancelled." -ForegroundColor Yellow; exit 0 }
+    if ($null -eq $scope) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
     if ($scope -eq 4) {
         $Category = 'All'
         $customApps = @()
@@ -128,25 +132,25 @@ if ($interactive) {
             $appsData = Invoke-RestMethod -Uri $appsUrl
         } catch {
             Write-Error "Could not download the app list from: $appsUrl. $_"
-            exit 1
+            $global:LASTEXITCODE = 1; if ($isIex) { return } else { exit 1 }
         }
         $flat = @($appsData.Base) + @($appsData.Dev) + @($appsData.Gaming)
         $customApps = Invoke-Menu -Title "Mark apps with Space, Enter to confirm" -Options $flat -Multi
-        if ($null -eq $customApps -or $customApps.Count -eq 0) { Write-Host "Cancelled." -ForegroundColor Yellow; exit 0 }
+        if ($null -eq $customApps -or $customApps.Count -eq 0) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
     } else {
         $Category = @('All', 'Base', 'Dev', 'Gaming')[$scope]
     }
     $gitChoice = Invoke-Menu -Title "Git configuration?" -Options @('Enter name/email', 'Skip Git configuration')
-    if ($null -eq $gitChoice) { Write-Host "Cancelled." -ForegroundColor Yellow; exit 0 }
+    if ($null -eq $gitChoice) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
     if ($gitChoice -eq 0) {
         $GitUserName = Read-Host "Enter your user name for Git"
         $GitUserEmail = Read-Host "Enter your email address for Git"
     }
     $confirm = Invoke-Menu -Title "Ready: Category=$Category Apps=$(if ($customApps.Count) { $customApps.Count } else { 'all' }) Git=$(if ($gitChoice -eq 0) { $GitUserName } else { 'skipped' })" -Options @('Install now', 'Simulate first (-WhatIf)', 'Cancel')
-    if ($null -eq $confirm -or $confirm -eq 2) { Write-Host "Cancelled." -ForegroundColor Yellow; exit 0 }
+    if ($null -eq $confirm -or $confirm -eq 2) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
     if ($confirm -eq 1) {
         Write-Host "Would download: $ZipUrl" -ForegroundColor Cyan
-        exit 0
+        $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 }
     }
 }
 
@@ -157,7 +161,7 @@ if ($WhatIfPreference) {
     if (-not [string]::IsNullOrWhiteSpace($GitUserName)) { $previewArgs += " -GitUserName `"$GitUserName`"" }
     if (-not [string]::IsNullOrWhiteSpace($GitUserEmail)) { $previewArgs += " -GitUserEmail `"$GitUserEmail`"" }
     Write-Host "Would extract it and run: install.ps1 $previewArgs" -ForegroundColor Cyan
-    exit 0
+    $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 }
 }
 
 # 3. Auto-elevation to Administrator
@@ -176,10 +180,10 @@ if (-not $isAdmin) {
     if ($KeepDownload) { $elevArgs += '-KeepDownload' }
     try {
         $child = Start-Process -FilePath "pwsh" -ArgumentList $elevArgs -Verb RunAs -Wait -PassThru
-        exit $child.ExitCode
+        $global:LASTEXITCODE = $child.ExitCode; if ($isIex) { return } else { exit $child.ExitCode }
     } catch {
         Write-Error "Elevation failed or was cancelled: $_"
-        exit 1
+        $global:LASTEXITCODE = 1; if ($isIex) { return } else { exit 1 }
     }
 }
 
@@ -191,7 +195,7 @@ try {
     New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
 } catch {
     Write-Error "Could not create working directory: $workDir. $_"
-    exit 1
+    $global:LASTEXITCODE = 1; if ($isIex) { return } else { exit 1 }
 }
 
 $downloaded = $false
@@ -208,7 +212,7 @@ for ($attempt = 1; $attempt -le 2; $attempt++) {
 }
 if (-not $downloaded) {
     Write-Error "Could not download the repository ZIP from: $ZipUrl"
-    exit 1
+    $global:LASTEXITCODE = 1; if ($isIex) { return } else { exit 1 }
 }
 
 # 5. Extract and locate install.ps1
@@ -216,12 +220,12 @@ try {
     Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
 } catch {
     Write-Error "Could not extract the repository ZIP: $_"
-    exit 1
+    $global:LASTEXITCODE = 1; if ($isIex) { return } else { exit 1 }
 }
 $installScript = Get-ChildItem -Path $extractDir -Recurse -Filter "install.ps1" -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($null -eq $installScript) {
     Write-Error "install.ps1 not found in the downloaded archive."
-    exit 1
+    $global:LASTEXITCODE = 1; if ($isIex) { return } else { exit 1 }
 }
 
 # Custom per-app mode: keep only the selected IDs in the extracted apps.json.
@@ -252,4 +256,4 @@ if ($KeepDownload) {
     Remove-Item -Path $workDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-exit $installExit
+$global:LASTEXITCODE = $installExit; if ($isIex) { return } else { exit $installExit }

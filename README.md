@@ -24,7 +24,7 @@ Desde PowerShell 7 (**no** hace falta abrirlo como admin: `bootstrap.ps1` se aut
 irm https://raw.githubusercontent.com/alexp11mon/windows-11-auto-setup/master/bootstrap.ps1 | iex
 ```
 
-El menú te deja elegir alcance (`All`, `Base`, `Dev`, `Gaming` o personalizado por app con Espacio), configurar u omitir Git, y confirmar o simular antes de instalar.
+El menú te deja elegir alcance (`All`, `Base`, `Dev`, `Gaming` o personalizado por app con Espacio), configurar u omitir Git, y confirmar o simular antes de instalar. La ventana nunca se cierra sola: al terminar (o cancelar) vuelve al prompt y el resultado queda en `$LASTEXITCODE` (`0` ok).
 
 ```powershell
 # Opción B: descargar el lanzador y ejecutarlo con parámetros
@@ -129,7 +129,7 @@ Con `Dev` o `All` además se aplica configuración de Git (`user.name`, `user.em
 ## Tests (no instalan nada, todo mockeado)
 
 ```powershell
-# Suite principal sin dependencias (92 checks)
+# Suite principal sin dependencias (95 checks)
 pwsh -NoProfile -File tests/Runner-Mock.ps1
 
 # Tests Pester 5 (requiere Install-Module Pester -MinimumVersion 5.0)
