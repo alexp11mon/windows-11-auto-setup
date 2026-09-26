@@ -4,7 +4,7 @@
 # Usage (PowerShell 7):
 #   .\bootstrap.ps1 [-Category Base|Dev|Gaming|All] [-WhatIf]
 #                   [-GitUserName "Name"] [-GitUserEmail "email@example.com"]
-#                   [-SkipGit] [-SkipVSCode] [-Branch "master"] [-KeepDownload]
+#                   [-SkipGit] [-SkipVSCode] [-SkipOpenCode] [-SkipBrave] [-Branch "master"] [-KeepDownload]
 # One-line interactive mode (no download, arrow-key menu):
 #   irm https://raw.githubusercontent.com/alexp11mon/windows-11-auto-setup/master/bootstrap.ps1 | iex
 # Remote two-line mode (no local clone needed):
@@ -27,7 +27,11 @@ param (
 
     [switch]$SkipGit,
 
-    [switch]$SkipVSCode
+    [switch]$SkipVSCode,
+
+    [switch]$SkipOpenCode,
+
+    [switch]$SkipBrave
 )
 
 # Under iex ($PSCommandPath is empty) plain exit would close the user's
@@ -157,7 +161,14 @@ if ($interactive) {
     if ($codeChoice -eq 1) {
         $SkipVSCode = $true
     }
-    $confirm = Invoke-Menu -Title "Ready: Category=$Category Apps=$(if ($customApps.Count) { $customApps.Count } else { 'all' }) Git=$(if ($SkipGit) { 'skipped' } else { $GitUserName }) VSCode=$(if ($SkipVSCode) { 'skipped' } else { 'extensions' })" -Options @('Install now', 'Simulate first (-WhatIf)', 'Cancel')
+    $openCodeChoice = Invoke-Menu -Title "OpenCode configuration?" -Options @('Install and configure OpenCode', 'Skip OpenCode configuration')
+    if ($null -eq $openCodeChoice) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
+    if ($openCodeChoice -eq 1) {
+        $SkipOpenCode = $true
+    }
+    # Brave extensions apply automatically on Base/All without asking.
+    $braveApplies = (($Category -eq 'Base') -or ($Category -eq 'All')) -and (-not $SkipBrave)
+    $confirm = Invoke-Menu -Title "Ready: Category=$Category Apps=$(if ($customApps.Count) { $customApps.Count } else { 'all' }) Git=$(if ($SkipGit) { 'skipped' } else { $GitUserName }) VSCode=$(if ($SkipVSCode) { 'skipped' } else { 'extensions' }) OpenCode=$(if ($SkipOpenCode) { 'skipped' } else { 'install' }) Brave=$(if ($braveApplies) { 'extensions' } else { 'skipped' })" -Options @('Install now', 'Simulate first (-WhatIf)', 'Cancel')
     if ($null -eq $confirm -or $confirm -eq 2) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
     if ($confirm -eq 1) {
         Write-Host "Would download: $ZipUrl" -ForegroundColor Cyan
@@ -171,6 +182,10 @@ if ($WhatIfPreference) {
     $previewArgs = "-Category $Category"
     if (-not [string]::IsNullOrWhiteSpace($GitUserName)) { $previewArgs += " -GitUserName `"$GitUserName`"" }
     if (-not [string]::IsNullOrWhiteSpace($GitUserEmail)) { $previewArgs += " -GitUserEmail `"$GitUserEmail`"" }
+    if ($SkipGit) { $previewArgs += " -SkipGit" }
+    if ($SkipVSCode) { $previewArgs += " -SkipVSCode" }
+    if ($SkipOpenCode) { $previewArgs += " -SkipOpenCode" }
+    if ($SkipBrave) { $previewArgs += " -SkipBrave" }
     Write-Host "Would extract it and run: install.ps1 $previewArgs" -ForegroundColor Cyan
     $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 }
 }
@@ -191,6 +206,8 @@ if (-not $isAdmin) {
     if ($KeepDownload) { $elevArgs += '-KeepDownload' }
     if ($SkipGit) { $elevArgs += '-SkipGit' }
     if ($SkipVSCode) { $elevArgs += '-SkipVSCode' }
+    if ($SkipOpenCode) { $elevArgs += '-SkipOpenCode' }
+    if ($SkipBrave) { $elevArgs += '-SkipBrave' }
     # The elevated child runs in its own window: capture its output so failures are visible here.
     $elevLog = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ("win11-setup-elevated-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
     try {
@@ -267,6 +284,8 @@ if (-not [string]::IsNullOrWhiteSpace($GitUserName)) { $installArgs += @('-GitUs
 if (-not [string]::IsNullOrWhiteSpace($GitUserEmail)) { $installArgs += @('-GitUserEmail', $GitUserEmail) }
 if ($SkipGit) { $installArgs += '-SkipGit' }
 if ($SkipVSCode) { $installArgs += '-SkipVSCode' }
+if ($SkipOpenCode) { $installArgs += '-SkipOpenCode' }
+if ($SkipBrave) { $installArgs += '-SkipBrave' }
 $proc = Start-Process -FilePath "pwsh" -ArgumentList $installArgs -Wait -PassThru -NoNewWindow
 $installExit = $proc.ExitCode
 

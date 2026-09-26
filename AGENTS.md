@@ -4,7 +4,7 @@
 
 ## Qué es
 
-Configurador de PC nuevo con Windows 11 64-bit: instala apps vía winget por categorías y configura Git + extensiones VSCode. Idempotente, re-ejecutable, con simulación `-WhatIf` y logs fechados.
+Configurador de PC nuevo con Windows 11 64-bit: instala apps vía winget por categorías, configura Git + extensiones VSCode + OpenCode (instalador oficial, excepción P2) y aplica extensiones de Brave. Idempotente, re-ejecutable, con simulación `-WhatIf` y logs fechados.
 
 ## Requisitos (no negociables)
 
@@ -24,6 +24,7 @@ Configurador de PC nuevo con Windows 11 64-bit: instala apps vía winget por cat
 .\install.ps1 -Category Base|Dev|Gaming
 .\install.ps1 -Category Dev -GitUserName "Nombre" -GitUserEmail "a@b.com"
 .\install.ps1 -Category All -SkipGit -SkipVSCode
+.\install.ps1 -Category All -SkipOpenCode -SkipBrave
 
 # Online (pwsh 7, auto-eleva solo)
 irm https://raw.githubusercontent.com/alexp11mon/windows-11-auto-setup/master/bootstrap.ps1 | iex
@@ -34,24 +35,26 @@ Salidas: `0` ok, `1` falta admin/OS/winget/módulo o cualquier `ERROR` en `logs/
 
 ## Estructura
 
-- `install.ps1`: entry local. Guards admin/OS/winget, `Join-Path` rutas, `Update-SessionPath`, orquesta categorías + Git/VSCode solo si Dev/All.
-- `bootstrap.ps1`: entry online. ZIP de `$Repo/$Branch` a `%TEMP%\win11-setup-*`, 2 intentos descarga, `Show-Menu` flechas + `Show-NumberedMenu` fallback, custom filtra `apps.json`, `-KeepDownload` conserva.
+- `install.ps1`: entry local. Guards admin/OS/winget, `Join-Path` rutas, `Update-SessionPath`, orquesta categorías + Git/VSCode/OpenCode solo si Dev/All + Brave solo si Base/All.
+- `bootstrap.ps1`: entry online. ZIP de `$Repo/$Branch` a `%TEMP%\win11-setup-*`, 2 intentos descarga, `Show-Menu` flechas + `Show-NumberedMenu` fallback, custom filtra `apps.json`, `-KeepDownload` conserva. Menú pregunta OpenCode (Brave automático en Base/All).
 - `config/apps.json`: `{Base[], Dev[], Gaming[]}` con IDs winget exactos. Datos, no lógica.
-- `config/vscode/extensions.json`: `{extensions[]}`.
+- `config/vscode/extensions.json`: `{extensions[]}`. `config/brave/extensions.json`: `{extensions[{id, name}]}`. `config/opencode/`: snapshot config global sin secretos.
 - `config/git/`: reservado, sin tokens.
 - `modules/Common.ps1`: `Write-InstallLog` (ERROR→`$global:InstallHadErrors`), `Test-AppInstalled` (`winget list --exact`), `Install-WingetApp` (`--exact --silent` + verificación, único con `ShouldProcess`).
 - `modules/Install-Category.ps1`: expande `All`, sin doble `ShouldProcess`.
 - `modules/Config-Git.ps1`: omite si no hay `git`; en `-WhatIf` sin datos no pregunta; valida email regex; aplica `main` + alias `tree`.
 - `modules/Config-VSCode.ps1`: instala ausentes con `code --install-extension --force`.
-- `tests/Runner-Mock.ps1`: suite sin dependencias (104 checks, todo mockeado). `tests/*.Tests.ps1`: Pester 5+.
-- `docs/constitution.md`: ley del proyecto. `specs/001-instalador-win11/{spec,plan,tasks}.md`: contrato SDD. `docs/estructura-proyecto.md`: mapa carpetas.
+- `modules/Config-OpenCode.ps1`: instalador oficial (2 intentos) + fusión conserva-con-aviso, omite secretos.
+- `modules/Config-Brave.ps1`: asegura Brave vía winget + extensiones idempotentes con aviso de reinicio.
+- `tests/Runner-Mock.ps1`: suite sin dependencias (159 checks, todo mockeado). `tests/*.Tests.ps1`: Pester 5+ (59 tests).
+- `docs/constitution.md`: ley del proyecto (P2 con excepción RF-17). `specs/001-instalador-win11/{spec,plan,tasks}.md` + `specs/002-opencode-brave-v2/{spec,plan,tasks}.md`: contratos SDD. `docs/estructura-proyecto.md`: mapa carpetas.
 
 ## Convenciones para IA
 
 - Español en docs y respuestas. Código en inglés (comentarios, mensajes y logs, ver `tasks.md` T9); inglés también en IDs winget/comandos.
 - `PascalCase` funciones, `Join-Path` siempre, `[CmdletBinding(SupportsShouldProcess=$true)]` en todo lo que cambie el sistema.
 - JSON en UTF-8, sin comentarios. Comentarios de código concisos, sin restos obvios de IA (v2 T8).
-- Prohibido: `choco`/`scoop`/`.exe` manuales, módulos PSGallery en instalación, credenciales/tokens, soporte Win10/Linux/macOS, cerrar consola bajo `iex`.
+- Prohibido: `choco`/`scoop`/`.exe` manuales (salvo instalador oficial OpenCode, RF-17), módulos PSGallery en instalación, credenciales/tokens, soporte Win10/Linux/macOS, cerrar consola bajo `iex`.
 - Apps por-usuario (Spotify `-1978335146`, Discord) pueden fallar como admin: continuar + `exit 1` + documentar instalación manual sin elevar.
 
 ## Tests (no instalan nada)
@@ -61,7 +64,7 @@ pwsh -NoProfile -File tests/Runner-Mock.ps1
 Invoke-Pester -Path ./tests -Output Detailed  # requiere Pester 5
 ```
 
-Toda tarea de código exige su test primero o cita el test que la cierra. Si tocas `Common`, `Install-Category`, `Config-Git/VSCode` o entries, la suite mockeada debe seguir en verde.
+Toda tarea de código exige su test primero o cita el test que la cierra. Si tocas `Common`, `Install-Category`, `Config-Git/VSCode/OpenCode/Brave` o entries, la suite mockeada debe seguir en verde.
 
 ## Flujo SDD obligatorio
 

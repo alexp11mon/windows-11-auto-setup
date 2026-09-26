@@ -24,7 +24,7 @@ Desde PowerShell 7 (**no** hace falta abrirlo como admin: `bootstrap.ps1` se aut
 irm https://raw.githubusercontent.com/alexp11mon/windows-11-auto-setup/master/bootstrap.ps1 | iex
 ```
 
-El menú te deja elegir alcance (`All`, `Base`, `Dev`, `Gaming` o personalizado por app con Espacio), configurar u omitir Git, y confirmar o simular antes de instalar. La ventana nunca se cierra sola: al terminar (o cancelar) vuelve al prompt y el resultado queda en `$LASTEXITCODE` (`0` ok).
+El menú te deja elegir alcance (`All`, `Base`, `Dev`, `Gaming` o personalizado por app con Espacio), configurar u omitir Git, VSCode y OpenCode, y confirmar o simular antes de instalar. Las extensiones de Brave se aplican automáticamente con `Base` o `All` sin preguntar. La ventana nunca se cierra sola: al terminar (o cancelar) vuelve al prompt y el resultado queda en `$LASTEXITCODE` (`0` ok).
 
 ```powershell
 # Opción B: descargar el lanzador y ejecutarlo con parámetros
@@ -102,7 +102,7 @@ Con `-Category All` se instala todo lo siguiente. Con `-Category Base|Dev|Gaming
 | Windows Terminal | `Microsoft.WindowsTerminal` |
 | Warp | `Warp.Warp` |
 
-Con `Dev` o `All` además se aplica configuración de Git (`user.name`, `user.email`, `init.defaultBranch=main` y alias `tree`) y se instalan las extensiones de VSCode.
+Con `Dev` o `All` además se aplica configuración de Git (`user.name`, `user.email`, `init.defaultBranch=main` y alias `tree`), se instalan las extensiones de VSCode y se instala OpenCode con su configuración global (ver sección OpenCode). Con `Base` o `All` además se aplican automáticamente las extensiones de Brave (ver sección Brave).
 
 ### Gaming
 
@@ -128,20 +128,42 @@ Con `Dev` o `All` además se aplica configuración de Git (`user.name`, `user.em
 | Python Debugger | `ms-python.debugpy` |
 | Python Envs | `ms-python.vscode-python-envs` |
 
+### OpenCode (instalador oficial, excepción a solo-winget)
+
+Con `Dev` o `All` (salvo `-SkipOpenCode`):
+
+1. Si `opencode` no está instalado, se instala con el instalador oficial publicado por el proyecto OpenCode (`https://opencode.ai/install.ps1`, descargado con 2 intentos y verificado con `opencode --version`). Es la única excepción aprobada a la regla "solo winget" (RF-17, spec 002).
+2. Se restaura la configuración global desde la copia versionada en `config/opencode/` (agentes, skills, plugins y `opencode.jsonc`) fusionando sin borrar nada existente: ante el mismo fichero con distinto contenido se conserva el del usuario con aviso. Los ficheros con posibles secretos se omiten con aviso y el `snapshot` del repo nunca contiene secretos.
+
+### Brave (extensiones automáticas)
+
+Con `Base` o `All` (salvo `-SkipBrave` y sin pregunta en el menú):
+
+1. Si Brave no está instalado, se instala primero vía winget.
+2. Se aplican las 5 extensiones de `config/brave/extensions.json` de forma idempotente (las ya aplicadas se omiten). Son efectivas tras **reiniciar Brave**.
+
+| Extensión | ID |
+|---|---|
+| uBlock Origin Lite | `ddkjiahejlhfcafbddmgiahcphecmpfh` |
+| Dark Reader | `eimadpbcbfnmbkopoojfekhnkhdbieeh` |
+| Decentraleyes | `ldpochfccmkkmhdbclfhpagapcfdljkj` |
+| Bitwarden | `nngceckbapebfimnlniiiahkandclblb` |
+| Privacy Badger | `pkehgijcmpdhfbdbbnkijodmdjhbjlgp` |
+
 ## Tests (no instalan nada, todo mockeado)
 
 ```powershell
-# Suite principal sin dependencias (104 checks)
+# Suite principal sin dependencias (159 checks)
 pwsh -NoProfile -File tests/Runner-Mock.ps1
 
-# Tests Pester 5 (requiere Install-Module Pester -MinimumVersion 5.0)
+# Tests Pester 5 (requiere Install-Module Pester -MinimumVersion 5.0, 59 tests)
 Invoke-Pester -Path ./tests -Output Detailed
 ```
 
 ## Notas
 
-- La configuración de Git y VSCode solo se aplica con `-Category Dev` o `-Category All`.
-- Git es interactivo por defecto (pregunta nombre/email). Pásalos con `-GitUserName`/`-GitUserEmail` para automatizar, omítelo con `-SkipGit` (igual `-SkipVSCode` para extensiones), o usa `-WhatIf` (no pregunta nada en simulación). El menú en línea ofrece ambas omisiones.
+- La configuración de Git, VSCode y OpenCode solo se aplica con `-Category Dev` o `-Category All`; la de Brave solo con `-Category Base` o `-Category All`.
+- Git es interactivo por defecto (pregunta nombre/email). Pásalos con `-GitUserName`/`-GitUserEmail` para automatizar, omítelo con `-SkipGit` (igual `-SkipVSCode`, `-SkipOpenCode`, `-SkipBrave` para el resto), o usa `-WhatIf` (no pregunta nada en simulación). El menú en línea ofrece omitir Git, VSCode y OpenCode (Brave es automático).
 - Cada ejecución genera un log fechado en `logs/install-YYYYMMDD-HHmmss.log` (`*.log` están ignorados por git).
 - La instalación es idempotente: lo ya instalado se omite y el script puede re-ejecutarse.
 - Tras instalar apps en la misma ejecución, el script refresca el `PATH` de la sesión (proceso + Machine + User, sin duplicados) para detectar `git`/`code` sin reiniciar. Si aun así su configuración se omite, abre una terminal nueva y re-ejecuta.
@@ -151,12 +173,14 @@ Invoke-Pester -Path ./tests -Output Detailed
 
 ## Estructura
 
-- `install.ps1`: punto de entrada. Chequea administrador, Windows 11 64-bit y winget. Flags `-Category` (`Base`, `Dev`, `Gaming`, `All`), `-GitUserName`/`-GitUserEmail`, `-SkipGit`/`-SkipVSCode` y `-WhatIf`. Marca `exit 1` si hubo algún `ERROR`.
-- `bootstrap.ps1`: instalación en línea. Descarga el ZIP de GitHub, se auto-eleva a admin y ejecuta `install.ps1` con los mismos flags más `-Branch` y `-KeepDownload`. Sin parámetros abre menú con flechas (alcance, personalizado, Git, VSCode, confirmación).
+- `install.ps1`: punto de entrada. Chequea administrador, Windows 11 64-bit y winget. Flags `-Category` (`Base`, `Dev`, `Gaming`, `All`), `-GitUserName`/`-GitUserEmail`, `-SkipGit`/`-SkipVSCode`/`-SkipOpenCode`/`-SkipBrave` y `-WhatIf`. Marca `exit 1` si hubo algún `ERROR`.
+- `bootstrap.ps1`: instalación en línea. Descarga el ZIP de GitHub, se auto-eleva a admin y ejecuta `install.ps1` con los mismos flags más `-Branch` y `-KeepDownload`. Sin parámetros abre menú con flechas (alcance, personalizado, Git, VSCode, OpenCode, confirmación; Brave automático en `Base`/`All`).
 - `config/apps.json`: lista de apps winget por categoría (`Base`, `Dev`, `Gaming`).
 - `config/vscode/extensions.json`: extensiones de VSCode a instalar.
+- `config/opencode/`: copia versionada de la configuración global de OpenCode (agentes, skills, plugins, `opencode.jsonc`), sin secretos.
+- `config/brave/extensions.json`: extensiones de Brave a aplicar (`{id, name}`).
 - `config/git/`: reservado para futura configuración de Git por fichero (hoy la config es interactiva vía `Config-Git.ps1` o por parámetros).
-- `modules/`: `Common.ps1` (log fechado, chequeo idempotente, instalación winget), `Install-Category.ps1` (orquesta categorías), `Config-Git.ps1`, `Config-VSCode.ps1`.
+- `modules/`: `Common.ps1` (log fechado, chequeo idempotente, instalación winget), `Install-Category.ps1` (orquesta categorías), `Config-Git.ps1`, `Config-VSCode.ps1`, `Config-OpenCode.ps1` (instalador oficial + fusión de snapshot), `Config-Brave.ps1` (Brave + extensiones).
 - `tests/`: `Runner-Mock.ps1` (suite sin dependencias, todo mockeado) + tests Pester 5 por módulo.
 - `logs/`: un `.log` fechado por ejecución.
 - `docs/`: notas del proyecto (`estructura-proyecto.md`).

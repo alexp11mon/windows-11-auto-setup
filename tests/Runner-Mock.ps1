@@ -351,6 +351,12 @@ Test-Assert ($entry -match 'Invoke-GitConfig -UserName') 'install.ps1 pasa param
 Test-Assert ($entry -match '\[switch\]\$SkipGit' -and $entry -match '\[switch\]\$SkipVSCode') 'install.ps1 acepta switches SkipGit/SkipVSCode'
 Test-Assert ($entry -match 'skipped via -SkipGit') 'install.ps1 omite Git con SkipGit sin preguntar'
 Test-Assert ($entry -match 'skipped via -SkipVSCode') 'install.ps1 omite VSCode con SkipVSCode'
+Test-Assert ($entry -match '\[switch\]\$SkipOpenCode' -and $entry -match '\[switch\]\$SkipBrave') 'install.ps1 acepta switches SkipOpenCode/SkipBrave'
+Test-Assert ($entry -match 'skipped via -SkipOpenCode') 'install.ps1 omite OpenCode con SkipOpenCode'
+Test-Assert ($entry -match 'skipped via -SkipBrave') 'install.ps1 omite Brave con SkipBrave'
+Test-Assert ($entry -match 'Invoke-OpenCodeConfig -ConfigSourcePath') 'install.ps1 invoca OpenCode con snapshot'
+Test-Assert ($entry -match 'Invoke-BraveConfig -ExtensionsConfigPath') 'install.ps1 invoca Brave con catalogo'
+Test-Assert ($entry -match '\$Category -eq ''Base''') 'Brave solo con Base o All'
 Test-Assert ($entry -match 'InstallHadErrors') 'install.ps1 propaga errores con exit code'
 
 # Logica Win11 replicada con valores reales (solo lectura)
@@ -432,6 +438,11 @@ Test-Assert (($boot -match "\$elevArgs \+= '-SkipGit'") -and ($boot -match "\$in
 Test-Assert ($boot -match 'RedirectStandardOutput' -and $boot -match 'Elevated installer exited with code') 'bootstrap.ps1 elevacion con log visible y exit code'
 Test-Assert ($boot -notmatch '''"\$selfPath"''' -and $boot -notmatch '''"\$\(\$installScript') 'bootstrap.ps1 sin comillas literales en ArgumentList'
 Test-Assert (($boot -match "\$elevArgs \+= '-SkipVSCode'") -and ($boot -match "\$installArgs \+= '-SkipVSCode'")) 'bootstrap.ps1 propaga SkipVSCode al elevar y al instalar'
+Test-Assert ($boot -match '\[switch\]\$SkipOpenCode' -and $boot -match '\[switch\]\$SkipBrave') 'bootstrap.ps1 acepta switches SkipOpenCode/SkipBrave'
+Test-Assert (($boot -match "\$elevArgs \+= '-SkipOpenCode'") -and ($boot -match "\$installArgs \+= '-SkipBrave'")) 'bootstrap.ps1 propaga SkipOpenCode/SkipBrave al elevar y al instalar'
+Test-Assert ($boot -match 'OpenCode configuration\?') 'bootstrap.ps1 menu pregunta por OpenCode'
+Test-Assert ($boot -notmatch 'Brave configuration\?') 'bootstrap.ps1 no pregunta por Brave (automatico en Base/All)'
+Test-Assert ($boot -match 'braveApplies') 'bootstrap.ps1 deriva Brave del alcance en confirmacion'
 
 # Test funcional de Show-NumberedMenu extrayendo la funcion (Read-Host mockeado, sin consola)
 if ($boot -match '(?s)(function Show-NumberedMenu \{.*?\n\})\s*\$ZipUrl') {

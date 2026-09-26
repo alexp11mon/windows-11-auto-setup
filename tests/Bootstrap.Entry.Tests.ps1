@@ -49,6 +49,17 @@ Describe 'bootstrap.ps1 online installer' {
         $script:Boot | Should -Match "\$elevArgs \+= '-SkipGit'"
         $script:Boot | Should -Match "\$installArgs \+= '-SkipVSCode'"
     }
+    It 'Supports SkipOpenCode/SkipBrave end to end' {
+        $script:Boot | Should -Match '\[switch\]\$SkipOpenCode'
+        $script:Boot | Should -Match '\[switch\]\$SkipBrave'
+        $script:Boot | Should -Match "\$elevArgs \+= '-SkipOpenCode'"
+        $script:Boot | Should -Match "\$installArgs \+= '-SkipBrave'"
+    }
+    It 'Menu asks for OpenCode but Brave applies automatically' {
+        $script:Boot | Should -Match 'OpenCode configuration\?'
+        $script:Boot | Should -Not -Match 'Brave configuration\?'
+        $script:Boot | Should -Match 'braveApplies'
+    }
     It 'Elevation is visible (log + exit code, no literal quotes)' {
         $script:Boot | Should -Match 'RedirectStandardOutput'
         $script:Boot | Should -Match 'Elevated installer exited with code'

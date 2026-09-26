@@ -16,10 +16,12 @@ Spec: `specs/002-opencode-brave-v2/spec.md`. Plan: `specs/002-opencode-brave-v2/
 - [x] T15 Implementar `Config-Brave` con tests primero
   Hecho cuando: `pwsh -NoProfile -File tests/Runner-Mock.ps1` en verde y `Config-Brave.Tests.ps1` en verde (Brave ausente → instalar primero, idempotencia por extensión, aviso de reinicio, `-WhatIf` sin efectos). Cubre: RF-22, RF-23, RF-26 | Módulo: Config-Brave
   Verificado: 2026-09-26, Runner 148/148 (Bloque 10: 16 checks) + Pester 6/6. Registro real solo en clave HKCU temporal con limpieza; reuso de `Install-WingetApp` para RF-23 (sin doble `ShouldProcess`, patrón D3).
-- [ ] T16 Integrar flags y menú en `install.ps1` y `bootstrap.ps1`
+- [x] T16 Integrar flags y menú en `install.ps1` y `bootstrap.ps1`
   Hecho cuando: `.\install.ps1 -Category All -WhatIf` y `.\bootstrap.ps1 -Category All -WhatIf` con salida 0, `-SkipOpenCode`/`-SkipBrave` omiten su bloque, y cancelar el menú nuevo sale con 0 sin cambios. Cubre: RF-24, RF-26 | Módulo: install.ps1, bootstrap.ps1
-- [ ] T17 Actualizar docs y enmienda P2
+  Verificado: 2026-09-26, suite 159/159 + Pester 59/59 (gating, propagación elevArgs/installArgs, pregunta OpenCode, sin pregunta Brave, 0 `exit` pelados). Demo `-WhatIf` con salida 0 pendiente de sesión admin (pasa a T18).
+- [x] T17 Actualizar docs y enmienda P2
   Hecho cuando: revisión del diff muestra README (OpenCode + Brave + skips), `docs/estructura-proyecto.md` (módulos y config nuevos), `docs/constitution.md` + `AGENTS.md` (excepción P2/RF-17), todo en español con código en inglés. Cubre: RF-27 | Módulo: docs
+  Verificado: 2026-09-26, diff revisado (README secciones OpenCode/Brave + conteos 159/59, estructura-proyecto árbol V2, P2 con excepción RF-17, AGENTS actualizado); addendum menú (sin pregunta Brave) ratificado en plan.md.
 - [ ] T18 Validar cobertura RF por RF y fuera de alcance
   Hecho cuando: checklist RF-17 a RF-27 con test o revisión que lo cubre, suite mockeada + Pester en verde, log `-WhatIf` sin `ERROR` imprevisto, y nada de Fuera de alcance en código/CLI. Cubre: todos | Módulo: validación
 

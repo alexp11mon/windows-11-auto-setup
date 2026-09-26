@@ -34,6 +34,17 @@ Describe 'install.ps1 entry guards' {
         $script:Entry | Should -Match 'skipped via -SkipGit'
         $script:Entry | Should -Match 'skipped via -SkipVSCode'
     }
+    It 'Omite OpenCode/Brave con switches sin preguntar' {
+        $script:Entry | Should -Match '\[switch\]\$SkipOpenCode'
+        $script:Entry | Should -Match '\[switch\]\$SkipBrave'
+        $script:Entry | Should -Match 'skipped via -SkipOpenCode'
+        $script:Entry | Should -Match 'skipped via -SkipBrave'
+    }
+    It 'OpenCode con Dev/All y Brave con Base/All' {
+        $script:Entry | Should -Match 'Invoke-OpenCodeConfig -ConfigSourcePath'
+        $script:Entry | Should -Match 'Invoke-BraveConfig -ExtensionsConfigPath'
+        $script:Entry | Should -Match '\$Category -eq ''Base'''
+    }
     It 'Propaga errores con InstallHadErrors y exit 1' {
         $script:Entry | Should -Match 'InstallHadErrors'
     }

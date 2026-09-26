@@ -9,7 +9,7 @@ No es un gestor de paquetes general, no soporta Windows 10, Linux, macOS ni Wind
 ## Principios innegociables
 
 - P1: Solo Windows 11 64-bit (Build >= 22000) con PowerShell 7 (`pwsh`). Se verifica con los guards de `install.ps1` (aborto con salida 1 si no cumple) y con `tests/Runner-Mock.ps1` en verde.
-- P2: Solo instalación vía winget con `--exact --accept-source-agreements --accept-package-agreements`. Se verifica inspeccionando `modules/Common.ps1`: prohibido `choco`, `scoop`, `.exe` manuales o `Install-Module` en ruta de instalación.
+- P2: Solo instalación vía winget con `--exact --accept-source-agreements --accept-package-agreements`. Se verifica inspeccionando `modules/Common.ps1`: prohibido `choco`, `scoop`, `.exe` manuales o `Install-Module` en ruta de instalación, con la única excepción aprobada de RF-17 (instalador oficial de OpenCode, spec 002).
 - P3: Instalación idempotente y re-ejecutable; lo ya instalado se omite sin error. Se verifica con `Test-AppInstalled` (`winget list --exact`) y re-ejecutando `.\install.ps1 -Category All` con salida 0.
 - P4: Todo `ERROR` en log marca fallo global (`$global:InstallHadErrors`) y salida 1; log fechado en `logs/install-YYYYMMDD-HHmmss.log`. Se verifica revisando `logs/` y `$LASTEXITCODE` = 1 ante cualquier `ERROR`.
 - P5: Todo cambio soporta `-WhatIf` vía `SupportsShouldProcess` sin efectos secundarios y sin preguntas interactivas en simulación. Se verifica con `.\install.ps1 -Category All -WhatIf` y `.\bootstrap.ps1 -Category All -WhatIf` sin descargas ni instalaciones.

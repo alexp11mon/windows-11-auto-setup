@@ -1,5 +1,5 @@
 # Automatic Windows 11 64-bit setup.
-# Usage: .\install.ps1 [-Category Base|Dev|Gaming|All] [-WhatIf] [-GitUserName "Name"] [-GitUserEmail "email@example.com"] [-SkipGit] [-SkipVSCode]
+# Usage: .\install.ps1 [-Category Base|Dev|Gaming|All] [-WhatIf] [-GitUserName "Name"] [-GitUserEmail "email@example.com"] [-SkipGit] [-SkipVSCode] [-SkipOpenCode] [-SkipBrave]
 # Requires: Windows 11 64-bit, PowerShell 7, winget, Administrator session.
 [CmdletBinding(SupportsShouldProcess = $true)]
 param (
@@ -12,12 +12,18 @@ param (
 
     [switch]$SkipGit,
 
-    [switch]$SkipVSCode
+    [switch]$SkipVSCode,
+
+    [switch]$SkipOpenCode,
+
+    [switch]$SkipBrave
 )
 
 $RepoRoot = $PSScriptRoot
 $AppsConfigPath = Join-Path -Path $RepoRoot -ChildPath "config/apps.json"
 $ExtensionsConfigPath = Join-Path -Path $RepoRoot -ChildPath "config/vscode/extensions.json"
+$OpenCodeConfigPath = Join-Path -Path $RepoRoot -ChildPath "config/opencode"
+$BraveExtensionsConfigPath = Join-Path -Path $RepoRoot -ChildPath "config/brave/extensions.json"
 
 function Update-SessionPath {
     # Apps installed via winget in this same session (git, code) are missing
@@ -138,7 +144,39 @@ if (Test-Path $VSCodeModulePath) {
     Write-InstallLog -Message "VSCode configuration module not found at: $VSCodeModulePath" -Level "WARNING"
 }
 
-# 10. Exit
+# 10. OpenCode configuration (Dev or All only)
+$OpenCodeModulePath = Join-Path -Path $RepoRoot -ChildPath (Join-Path "modules" "Config-OpenCode.ps1")
+if (Test-Path $OpenCodeModulePath) {
+    . $OpenCodeModulePath
+
+    if ($Category -eq 'Dev' -or $Category -eq 'All') {
+        if ($SkipOpenCode) {
+            Write-InstallLog -Message "OpenCode configuration skipped via -SkipOpenCode flag." -Level "INFO"
+        } else {
+            Invoke-OpenCodeConfig -ConfigSourcePath $OpenCodeConfigPath
+        }
+    }
+} else {
+    Write-InstallLog -Message "OpenCode configuration module not found at: $OpenCodeModulePath" -Level "WARNING"
+}
+
+# 11. Brave configuration (Base or All only)
+$BraveModulePath = Join-Path -Path $RepoRoot -ChildPath (Join-Path "modules" "Config-Brave.ps1")
+if (Test-Path $BraveModulePath) {
+    . $BraveModulePath
+
+    if ($Category -eq 'Base' -or $Category -eq 'All') {
+        if ($SkipBrave) {
+            Write-InstallLog -Message "Brave configuration skipped via -SkipBrave flag." -Level "INFO"
+        } else {
+            Invoke-BraveConfig -ExtensionsConfigPath $BraveExtensionsConfigPath
+        }
+    }
+} else {
+    Write-InstallLog -Message "Brave configuration module not found at: $BraveModulePath" -Level "WARNING"
+}
+
+# 12. Exit
 Write-InstallLog -Message "Installer run finished." -Level "INFO"
 if ($global:InstallHadErrors) {
     Write-Host "Completed with errors. Check the logs/ folder for details." -ForegroundColor Red

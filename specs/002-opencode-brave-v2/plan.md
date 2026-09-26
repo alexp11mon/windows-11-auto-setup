@@ -41,7 +41,7 @@ Dos módulos nuevos dot-sourced (`Config-OpenCode`, `Config-Brave`) + datos vers
 2. Si Dev/All → `Invoke-OpenCodeConfig`: detecta presencia (RF-18 omite install si existe) → si falta, instalador oficial con 1 reintento (RF-17, RF-25) → fusiona snapshot (RF-19, RF-20 conserva-con-aviso, RF-21 omite secretos) → en `-WhatIf` solo describe (RF-26).
 3. Si Base/All → `Invoke-BraveConfig`: asegura Brave (RF-23) → aplica las 5 extensiones omitiendo las ya aplicadas (RF-22) → avisa del reinicio → en `-WhatIf` solo describe (RF-26).
 4. Cierre v1 sin cambios: `InstallHadErrors` → `exit 1`, si no `exit 0`.
-5. Online: `bootstrap` pregunta OpenCode/Brave (RF-24 omite si se pide, cancelación en 0) → propaga flags → `install.ps1` → propaga exit.
+5. Online: `bootstrap` pregunta OpenCode (aplicar u omitir; RF-24, cancelación en 0) y deriva Brave del alcance sin preguntar (addendum ratificado en T16: Brave automático en Base/All) → propaga flags → `install.ps1` → propaga exit.
 6. Docs (RF-27): README/estructura-proyecto/constitución/AGENTS actualizados en español, sin cambiar lógica.
 
 ## Decisiones técnicas
@@ -78,3 +78,4 @@ Dos módulos nuevos dot-sourced (`Config-OpenCode`, `Config-Brave`) + datos vers
 ## Dudas abiertas
 
 - Sin `[NECESITA ACLARACION]` bloqueante. RF-20 resuelto (conservar con aviso).
+- Addendums ratificados en implementación: params opcionales `DestinationRoot`/`PolicyRoot` (T14/T15, no rompen contratos); menú en línea pregunta OpenCode pero no Brave (T16, RF-24 cubierto por `-SkipBrave`).
