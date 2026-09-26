@@ -22,8 +22,9 @@ Spec: `specs/002-opencode-brave-v2/spec.md`. Plan: `specs/002-opencode-brave-v2/
 - [x] T17 Actualizar docs y enmienda P2
   Hecho cuando: revisión del diff muestra README (OpenCode + Brave + skips), `docs/estructura-proyecto.md` (módulos y config nuevos), `docs/constitution.md` + `AGENTS.md` (excepción P2/RF-17), todo en español con código en inglés. Cubre: RF-27 | Módulo: docs
   Verificado: 2026-09-26, diff revisado (README secciones OpenCode/Brave + conteos 159/59, estructura-proyecto árbol V2, P2 con excepción RF-17, AGENTS actualizado); addendum menú (sin pregunta Brave) ratificado en plan.md.
-- [ ] T18 Validar cobertura RF por RF y fuera de alcance
+- [x] T18 Validar cobertura RF por RF y fuera de alcance
   Hecho cuando: checklist RF-17 a RF-27 con test o revisión que lo cubre, suite mockeada + Pester en verde, log `-WhatIf` sin `ERROR` imprevisto, y nada de Fuera de alcance en código/CLI. Cubre: todos | Módulo: validación
+  Verificado: 2026-09-26, Runner 159/159 + Pester 59/59; RF-17..27 trazados a Bloques 7-10/entry tests/T12/T13/diff T17; grep fuera-de-alcance 0 hits en `*.ps1`; demo admin por usuario: `install -WhatIf` EXIT 0 ("Completed successfully", implica sin `ERROR`) y `bootstrap -WhatIf` EXIT 0; `logs/` sin `ERROR`.
 
 ## Trazabilidad RF -> Tareas
 
