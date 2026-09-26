@@ -26,9 +26,15 @@ Instalador/
 │   └── Bootstrap.Entry.Tests.ps1
 ├── logs/
 ├── docs/
+│   ├── constitution.md
 │   └── estructura-proyecto.md
+├── specs/001-instalador-win11/
+│   ├── spec.md
+│   ├── plan.md
+│   └── tasks.md
 ├── install.ps1
 ├── bootstrap.ps1
+├── AGENTS.md
 ├── .gitignore
 ├── LICENSE
 └── README.md
@@ -60,7 +66,10 @@ Suite mockeada sin dependencias (`Runner-Mock.ps1`, 102 checks: sintaxis, JSON, 
 Un `.log` fechado por ejecución (`install-YYYYMMDD-HHmmss.log`). Qué fue instalado y qué falló. Los `*.log` están ignorados por git; la carpeta se conserva con `.gitkeep`.
 
 ### `docs/`
-Notas del proyecto. Incluye este archivo.
+Notas del proyecto. `constitution.md` es la ley SDD (manda sobre spec/plan/tasks/código). Incluye este archivo.
+
+### `specs/001-instalador-win11/`
+Contrato SDD: `spec.md` (QUÉ + RF en EARS, v1+v2), `plan.md` (CÓMO + decisiones D1..D8), `tasks.md` (T1..T11 con Hecho cuando + trazabilidad).
 
 ## Archivos
 
@@ -75,6 +84,9 @@ Ignora `logs/*.log` y temporales de Windows y VSCode. Conserva carpetas vacías 
 
 ### `README.md`
 Portada del repo: requisitos, cómo ejecutar (categorías, Git no interactivo, códigos de salida, tests), categorías y modo `-WhatIf`. Incluye créditos de tests con IA.
+
+### `AGENTS.md`
+Guía operativa para IA: comandos, estructura, convenciones, tests y flujo SDD obligatorio.
 
 ### `.gitkeep`
 Placeholder para que git conserve carpetas vacías (`logs/`, `config/git/`). Se borra cuando la carpeta tenga archivos reales.
