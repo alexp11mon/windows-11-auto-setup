@@ -1,0 +1,24 @@
+{
+  "extensions": [
+    {
+      "id": "ddkjiahejlhfcafbddmgiahcphecmpfh",
+      "name": "uBlock Origin Lite"
+    },
+    {
+      "id": "eimadpbcbfnmbkopoojfekhnkhdbieeh",
+      "name": "Dark Reader"
+    },
+    {
+      "id": "ldpochfccmkkmhdbclfhpagapcfdljkj",
+      "name": "Decentraleyes"
+    },
+    {
+      "id": "nngceckbapebfimnlniiiahkandclblb",
+      "name": "Bitwarden"
+    },
+    {
+      "id": "pkehgijcmpdhfbdbbnkijodmdjhbjlgp",
+      "name": "Privacy Badger"
+    }
+  ]
+}
