@@ -131,7 +131,7 @@ Con `Dev` o `All` además se aplica configuración de Git (`user.name`, `user.em
 ## Tests (no instalan nada, todo mockeado)
 
 ```powershell
-# Suite principal sin dependencias (102 checks)
+# Suite principal sin dependencias (104 checks)
 pwsh -NoProfile -File tests/Runner-Mock.ps1
 
 # Tests Pester 5 (requiere Install-Module Pester -MinimumVersion 5.0)
@@ -146,6 +146,7 @@ Invoke-Pester -Path ./tests -Output Detailed
 - La instalación es idempotente: lo ya instalado se omite y el script puede re-ejecutarse.
 - Tras instalar apps en la misma ejecución, el script refresca el `PATH` de la sesión (proceso + Machine + User, sin duplicados) para detectar `git`/`code` sin reiniciar. Si aun así su configuración se omite, abre una terminal nueva y re-ejecuta.
 - Todos los fallos críticos salen con código `1`, apto para automatización (cualquier `ERROR` en el log marca la ejecución como fallida).
+- Los mensajes del código y de los logs están en inglés; la documentación de usuario sigue en español.
 - La detección de Windows 11 64-bit es independiente del idioma (acepta `64-bit`, `64 bits`, etc.) y ante un aborto muestra los valores detectados.
 
 ## Estructura

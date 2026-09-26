@@ -1,6 +1,6 @@
-# Instalador automático Windows 11 64-bit.
-# Uso: .\install.ps1 [-Category Base|Dev|Gaming|All] [-WhatIf] [-GitUserName "Nombre"] [-GitUserEmail "email@ejemplo.com"] [-SkipGit] [-SkipVSCode]
-# Requiere: Windows 11 64-bit, PowerShell 7, winget, ejecución como Administrador.
+# Automatic Windows 11 64-bit setup.
+# Usage: .\install.ps1 [-Category Base|Dev|Gaming|All] [-WhatIf] [-GitUserName "Name"] [-GitUserEmail "email@example.com"] [-SkipGit] [-SkipVSCode]
+# Requires: Windows 11 64-bit, PowerShell 7, winget, Administrator session.
 [CmdletBinding(SupportsShouldProcess = $true)]
 param (
     [ValidateSet('Base', 'Dev', 'Gaming', 'All')]
@@ -20,10 +20,8 @@ $AppsConfigPath = Join-Path -Path $RepoRoot -ChildPath "config/apps.json"
 $ExtensionsConfigPath = Join-Path -Path $RepoRoot -ChildPath "config/vscode/extensions.json"
 
 function Update-SessionPath {
-    # Tras instalar apps con winget en la misma sesión, el PATH del proceso
-    # no incluye las nuevas rutas (git, code). Refrescar combinando:
-    # PATH actual del proceso + Machine + User, sin duplicados.
-    # Asi no se pierden entradas solo-proceso.
+    # Apps installed via winget in this same session (git, code) are missing
+    # from the process PATH. Merge process + Machine + User PATHs, deduplicated.
     try {
         $machine = [Environment]::GetEnvironmentVariable("Path", "Machine")
         $user = [Environment]::GetEnvironmentVariable("Path", "User")
@@ -43,25 +41,23 @@ function Update-SessionPath {
             $env:Path = $combined -join ';'
         }
     } catch {
-        Write-Warning "No se pudo refrescar el PATH de la sesion: $_"
+        Write-Warning "Could not refresh the session PATH: $_"
     }
 }
 
-# 1. Comprobación de permisos de Administrador
+# 1. Administrator privileges
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
-    Write-Error "Este script requiere permisos de Administrador. Abre PowerShell como Administrador y vuelve a intentarlo."
+    Write-Error "Administrator privileges are required. Open PowerShell as Administrator and try again."
     exit 1
 }
 
-# 2. Comprobación de Windows 11 de 64 bits (SO, no solo CPU).
-# Nota: Win32_OperatingSystem.OSArchitecture viene localizado según el idioma
-# de Windows ("64-bit" en inglés, "64 bits" en español...). Por eso la
-# comparación es independiente del idioma vía -match '64', con
-# [Environment]::Is64BitOperatingSystem como condición principal.
+# 2. Windows 11 64-bit OS check. Win32_OperatingSystem.OSArchitecture is
+# localized ("64-bit" in English, "64 bits" in Spanish), so match '64'
+# instead of comparing the exact string.
 $os = Get-CimInstance Win32_OperatingSystem
 if ($null -eq $os) {
-    Write-Error "No se pudo consultar la informacion del sistema operativo. Ejecuta este script en PowerShell 7 como Administrador."
+    Write-Error "Could not query operating system information. Run this script in PowerShell 7 as Administrator."
     exit 1
 }
 $detectedBuild = [int]$os.BuildNumber
@@ -71,81 +67,81 @@ $isWin11 = $detectedBuild -ge 22000
 $is64BitOS = $is64BitEnv -and ($detectedArch -match '64')
 
 if (-not ($isWin11 -and $is64BitOS)) {
-    Write-Error "Este script esta disenado exclusivamente para Windows 11 de 64 bits (Build >= 22000, SO 64-bit). Detectado: Build=$detectedBuild, Arquitectura='$detectedArch', SO64bit=$is64BitEnv. Ejecucion abortada."
+    Write-Error "This script targets 64-bit Windows 11 only (Build >= 22000, 64-bit OS). Detected: Build=$detectedBuild, Architecture='$detectedArch', OS64bit=$is64BitEnv. Aborting."
     exit 1
 }
 
-# 3. Comprobación de disponibilidad de winget
+# 3. winget availability
 if (-not (Get-Command "winget" -ErrorAction SilentlyContinue)) {
-    Write-Error "La herramienta winget no esta disponible en este sistema. Instalala (App Installer desde Microsoft Store) para continuar."
+    Write-Error "winget is not available on this system. Install it (App Installer from the Microsoft Store) to continue."
     exit 1
 }
 
-# 4. Importar módulos (rutas resueltas con Join-Path anidado)
+# 4. Import shared module
 $CommonModulePath = Join-Path -Path $RepoRoot -ChildPath (Join-Path "modules" "Common.ps1")
 if (Test-Path $CommonModulePath) {
     . $CommonModulePath
 } else {
-    Write-Error "No se encontro el modulo basico en la ruta: $CommonModulePath. Ejecucion abortada."
+    Write-Error "Shared module not found at: $CommonModulePath. Aborting."
     exit 1
 }
 
-# 5. Iniciar registro de actividad (archivo fechado en logs/)
+# 5. Start timestamped logging
 $global:InstallHadErrors = $false
 Initialize-InstallLog | Out-Null
-Write-InstallLog -Message "Iniciando instalador automatico. Categoria seleccionada: $Category" -Level "INFO"
+Write-InstallLog -Message "Starting automatic installer. Selected category: $Category" -Level "INFO"
 
-# 6. Importar módulo de categorías
+# 6. Import category module
 $CategoryModulePath = Join-Path -Path $RepoRoot -ChildPath (Join-Path "modules" "Install-Category.ps1")
 if (Test-Path $CategoryModulePath) {
     . $CategoryModulePath
 } else {
-    Write-InstallLog -Message "Fallo critico: Modulo Install-Category no encontrado en: $CategoryModulePath." -Level "ERROR"
+    Write-InstallLog -Message "Critical failure: Install-Category module not found at: $CategoryModulePath." -Level "ERROR"
     exit 1
 }
 
-# 7. Ejecutar instalación de winget (-WhatIf se propaga por $WhatIfPreference)
+# 7. Run winget installation (-WhatIf flows through $WhatIfPreference)
 Invoke-InstallCategory -Category $Category -AppsConfigPath $AppsConfigPath
 
-# Refrescar PATH para que git/code recién instalados sean detectables sin reiniciar.
+# Refresh PATH so same-run git/code installs are detectable without a restart.
 Update-SessionPath
 
-# 8. Configuración de Git (solo Dev o All)
+# 8. Git configuration (Dev or All only)
 $GitModulePath = Join-Path -Path $RepoRoot -ChildPath (Join-Path "modules" "Config-Git.ps1")
 if (Test-Path $GitModulePath) {
     . $GitModulePath
 
     if ($Category -eq 'Dev' -or $Category -eq 'All') {
         if ($SkipGit) {
-            Write-InstallLog -Message "Configuracion de Git omitida por flag -SkipGit." -Level "INFO"
+            Write-InstallLog -Message "Git configuration skipped via -SkipGit flag." -Level "INFO"
         } else {
             Invoke-GitConfig -UserName $GitUserName -UserEmail $GitUserEmail
         }
     }
 } else {
-    Write-InstallLog -Message "Modulo de configuracion de Git no encontrado en: $GitModulePath" -Level "WARNING"
+    Write-InstallLog -Message "Git configuration module not found at: $GitModulePath" -Level "WARNING"
 }
 
-# 9. Configuración de VSCode (solo Dev o All)
+# 9. VSCode configuration (Dev or All only)
 $VSCodeModulePath = Join-Path -Path $RepoRoot -ChildPath (Join-Path "modules" "Config-VSCode.ps1")
 if (Test-Path $VSCodeModulePath) {
     . $VSCodeModulePath
 
     if ($Category -eq 'Dev' -or $Category -eq 'All') {
         if ($SkipVSCode) {
-            Write-InstallLog -Message "Configuracion de VSCode omitida por flag -SkipVSCode." -Level "INFO"
+            Write-InstallLog -Message "VSCode configuration skipped via -SkipVSCode flag." -Level "INFO"
         } else {
             Invoke-VSCodeConfig -ExtensionsConfigPath $ExtensionsConfigPath
         }
     }
 } else {
-    Write-InstallLog -Message "Modulo de configuracion de VSCode no encontrado en: $VSCodeModulePath" -Level "WARNING"
+    Write-InstallLog -Message "VSCode configuration module not found at: $VSCodeModulePath" -Level "WARNING"
 }
 
-# 10. Cierre
-Write-InstallLog -Message "Ejecucion del instalador finalizada." -Level "INFO"
+# 10. Exit
+Write-InstallLog -Message "Installer run finished." -Level "INFO"
 if ($global:InstallHadErrors) {
-    Write-Host "Proceso completado con errores. Revisa la carpeta logs/ para mas detalles." -ForegroundColor Red
+    Write-Host "Completed with errors. Check the logs/ folder for details." -ForegroundColor Red
     exit 1
 }
-Write-Host "Proceso completado. Revisa la carpeta logs/ para mas detalles." -ForegroundColor Green
+Write-Host "Completed successfully. Check the logs/ folder for details." -ForegroundColor Green

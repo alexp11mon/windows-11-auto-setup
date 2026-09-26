@@ -18,7 +18,7 @@ Describe 'Config-VSCode' {
         Mock code { $global:LASTEXITCODE = 0 } -ParameterFilter { ($args -join ' ') -match 'install-extension' }
         Mock Write-InstallLog { }
         Invoke-VSCodeConfig -ExtensionsConfigPath $script:ExtPath
-        Should -Invoke Write-InstallLog -ParameterFilter { $Message -match 'ya esta instalada' }
+        Should -Invoke Write-InstallLog -ParameterFilter { $Message -match 'already installed' }
     }
     It '-WhatIf no instala' {
         Mock Get-Command { @{ Name = 'code' } } -ParameterFilter { $Name -eq 'code' }

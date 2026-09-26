@@ -35,6 +35,6 @@ Describe 'Config-Git' {
         Mock git { throw 'no debe ejecutarse' }
         Mock Write-InstallLog { }
         { Invoke-GitConfig -WhatIf } | Should -Not -Throw
-        Should -Invoke Write-InstallLog -ParameterFilter { $Message -match 'sin datos interactivos' }
+        Should -Invoke Write-InstallLog -ParameterFilter { $Message -match 'no interactive input' }
     }
 }

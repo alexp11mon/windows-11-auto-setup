@@ -147,24 +147,24 @@ Test-Assert ($r2 -eq $false) 'Test-AppInstalled false si no esta'
 Reset-Capture; $global:MockInstallCalls = @()
 Install-WingetApp -AppId 'Brave.Brave' -AppName 'Brave'
 Test-Assert ($global:MockInstallCalls.Count -eq 0) 'Install-WingetApp omite si ya instalado'
-Test-Assert (($script:CapturedLogs -join "`n") -match 'Omitiendo') 'Log dice Omitiendo cuando ya instalado'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'Skipping') 'Log dice Omitiendo cuando ya instalado'
 
 # No instalado + WhatIf => no llama a install real, solo log simulacion
 Reset-Capture; $global:MockInstallCalls = @(); $global:MockInstalledIds = @()
 Install-WingetApp -AppId 'Valve.Steam' -AppName 'Steam' -WhatIf
 Test-Assert ($global:MockInstallCalls.Count -eq 0) 'WhatIf no ejecuta winget install'
-Test-Assert (($script:CapturedLogs -join "`n") -match 'simulacion') 'WhatIf loguea simulacion'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'Simulation') 'WhatIf loguea simulacion'
 
 # No instalado, sin WhatIf, exit 0 pero sigue sin aparecer => ERROR post-verificacion
 Reset-Capture; $global:MockInstallCalls = @(); $global:MockInstalledIds = @(); $global:MockInstallExit = 0
 Install-WingetApp -AppId 'Valve.Steam' -AppName 'Steam'
 Test-Assert ($global:MockInstallCalls.Count -eq 1) 'Sin WhatIf llama 1 vez a winget install'
-Test-Assert (($script:CapturedLogs -join "`n") -match 'no aparece') 'Post-verificacion ERROR si no aparece en list'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'not listed') 'Post-verificacion ERROR si no aparece en list'
 
 # winget devuelve codigo !=0 => ERROR
 Reset-Capture; $global:MockInstallCalls = @(); $global:MockInstalledIds = @(); $global:MockInstallExit = 1
 Install-WingetApp -AppId 'Valve.Steam' -AppName 'Steam'
-Test-Assert (($script:CapturedLogs -join "`n") -match 'codigo 1') 'Loguea codigo de salida winget !=0'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'exit code 1') 'Loguea codigo de salida winget !=0'
 
 # Regex escape: AppId con puntos no debe hacer match parcial
 $global:MockInstalledIds = @('BraveXBrave'); $global:MockInstallExit = 0
@@ -202,14 +202,14 @@ Test-Assert ($global:SpyInstalled.Count -eq 16) "Category All expande a 16 (real
 # Fichero inexistente => ERROR y return sin excepcion
 Reset-Capture
 Invoke-InstallCategory -Category 'Base' -AppsConfigPath (Join-Path $RepoRoot 'config/noexiste.json')
-Test-Assert (($script:CapturedLogs -join "`n") -match 'No se encontro') 'Categoria con fichero inexistente loguea ERROR'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'not found') 'Categoria con fichero inexistente loguea ERROR'
 
 # JSON invalido => ERROR
 $badJson = Join-Path ([System.IO.Path]::GetTempPath()) 'bad-apps.json'
 '{ invalido' | Set-Content $badJson -Encoding UTF8
 Reset-Capture
 Invoke-InstallCategory -Category 'Base' -AppsConfigPath $badJson
-Test-Assert (($script:CapturedLogs -join "`n") -match 'JSON valido') 'Categoria con JSON invalido loguea ERROR'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'valid JSON') 'Categoria con JSON invalido loguea ERROR'
 Remove-Item $badJson -Force -ErrorAction SilentlyContinue
 
 # Categoria vacia => WARNING
@@ -217,7 +217,7 @@ $emptyJson = Join-Path ([System.IO.Path]::GetTempPath()) 'empty-apps.json'
 '{ "Base": [], "Dev": [], "Gaming": [] }' | Set-Content $emptyJson -Encoding UTF8
 Reset-Capture
 Invoke-InstallCategory -Category 'Base' -AppsConfigPath $emptyJson
-Test-Assert (($script:CapturedLogs -join "`n") -match 'no tiene aplicaciones') 'Categoria vacia loguea WARNING'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'no applications') 'Categoria vacia loguea WARNING'
 Remove-Item $emptyJson -Force -ErrorAction SilentlyContinue
 
 # AppName extraccion: ultimo segmento tras punto
@@ -253,14 +253,14 @@ Test-Assert (($global:MockGitCalls -join "`n") -match 'init.defaultBranch') 'Git
 Reset-Capture; $global:MockGitCalls = @()
 Invoke-GitConfig -UserName 'Test' -UserEmail 'no-es-email'
 Test-Assert ($global:MockGitCalls.Count -eq 0) 'Email invalido no ejecuta git'
-Test-Assert (($script:CapturedLogs -join "`n") -match 'formato invalido') 'Email invalido loguea WARNING'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'Invalid email') 'Email invalido loguea WARNING'
 
 Reset-Capture; $global:MockGitCalls = @()
 # En WhatIf con params no debe llamar a git real
 function Read-Host { param($Prompt) return 'mocked' }
 Invoke-GitConfig -UserName 'Test' -UserEmail 'test@example.com' -WhatIf
 Test-Assert ($global:MockGitCalls.Count -eq 0) 'WhatIf no ejecuta git real'
-Test-Assert (($script:CapturedLogs -join "`n") -match 'simulacion') 'Git WhatIf loguea simulacion'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'Simulation') 'Git WhatIf loguea simulacion'
 Remove-Item function:\Read-Host -ErrorAction SilentlyContinue
 
 # Git WhatIf SIN params no debe bloquear pidiendo Read-Host (fix del bloqueo)
@@ -269,7 +269,7 @@ function Read-Host { param($Prompt) throw 'Read-Host no debe llamarse en WhatIf 
 try {
     Invoke-GitConfig -WhatIf
     Test-Assert ($global:MockGitCalls.Count -eq 0) 'Git WhatIf sin params no ejecuta git'
-    Test-Assert (($script:CapturedLogs -join "`n") -match 'sin datos interactivos') 'Git WhatIf sin params loguea sin datos y no bloquea'
+    Test-Assert (($script:CapturedLogs -join "`n") -match 'no interactive input') 'Git WhatIf sin params loguea sin datos y no bloquea'
 } catch {
     Test-Assert $false 'Git WhatIf sin params no bloquea' "$_"
 }
@@ -284,7 +284,7 @@ function Get-Command {
     Microsoft.PowerShell.Core\Get-Command -Name $Name @Rest -ErrorAction SilentlyContinue
 }
 Invoke-GitConfig -UserName 'Test' -UserEmail 'test@example.com'
-Test-Assert (($script:CapturedLogs -join "`n") -match 'no se encuentra instalado|no esta en el PATH') 'Sin git loguea WARNING y omite'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'not installed|not on this session') 'Sin git loguea WARNING y omite'
 Test-Assert ($global:MockGitCalls.Count -eq 0) 'Sin git no ejecuta git'
 Remove-Item function:\Get-Command -ErrorAction SilentlyContinue
 
@@ -303,7 +303,7 @@ function code {
 Reset-Capture
 Invoke-VSCodeConfig -ExtensionsConfigPath $ExtConfigPath
 Test-Assert ($global:MockCodeCalls.Count -ge 1) "VSCode instala faltantes (llamadas=$($global:MockCodeCalls.Count))"
-Test-Assert (($script:CapturedLogs -join "`n") -match 'ya esta instalada') 'VSCode detecta ya instalada (idempotente)'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'already installed') 'VSCode detecta ya instalada (idempotente)'
 
 # WhatIf no instala
 $global:MockCodeCalls = @(); Reset-Capture
@@ -313,7 +313,7 @@ Test-Assert ($global:MockCodeCalls.Count -eq 0) 'VSCode WhatIf no ejecuta code -
 # Fichero inexistente => ERROR
 Reset-Capture
 Invoke-VSCodeConfig -ExtensionsConfigPath (Join-Path $RepoRoot 'config/vscode/noexiste.json')
-Test-Assert (($script:CapturedLogs -join "`n") -match 'No se encontro') 'VSCode fichero inexistente loguea ERROR'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'not found') 'VSCode fichero inexistente loguea ERROR'
 
 # Sin code en PATH (mockear Get-Command, SIN tocar code real)
 $global:MockCodeCalls = @()
@@ -324,7 +324,7 @@ function Get-Command {
     Microsoft.PowerShell.Core\Get-Command -Name $Name @Rest -ErrorAction SilentlyContinue
 }
 Invoke-VSCodeConfig -ExtensionsConfigPath $ExtConfigPath
-Test-Assert (($script:CapturedLogs -join "`n") -match 'no se encuentra disponible') 'Sin code loguea WARNING y omite'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'not available') 'Sin code loguea WARNING y omite'
 Test-Assert ($global:MockCodeCalls.Count -eq 0) 'Sin code no ejecuta code'
 Remove-Item function:\Get-Command -ErrorAction SilentlyContinue
 
@@ -345,8 +345,8 @@ Test-Assert ($entry -match "Category.*Dev.*or.*All") 'Git/VSCode solo con Dev o 
 Test-Assert ($entry -match 'GitUserName' -and $entry -match 'GitUserEmail') 'install.ps1 acepta GitUserName/GitUserEmail'
 Test-Assert ($entry -match 'Invoke-GitConfig -UserName') 'install.ps1 pasa params a Invoke-GitConfig'
 Test-Assert ($entry -match '\[switch\]\$SkipGit' -and $entry -match '\[switch\]\$SkipVSCode') 'install.ps1 acepta switches SkipGit/SkipVSCode'
-Test-Assert ($entry -match 'omitida por flag -SkipGit') 'install.ps1 omite Git con SkipGit sin preguntar'
-Test-Assert ($entry -match 'omitida por flag -SkipVSCode') 'install.ps1 omite VSCode con SkipVSCode'
+Test-Assert ($entry -match 'skipped via -SkipGit') 'install.ps1 omite Git con SkipGit sin preguntar'
+Test-Assert ($entry -match 'skipped via -SkipVSCode') 'install.ps1 omite VSCode con SkipVSCode'
 Test-Assert ($entry -match 'InstallHadErrors') 'install.ps1 propaga errores con exit code'
 
 # Logica Win11 replicada con valores reales (solo lectura)

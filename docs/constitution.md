@@ -32,7 +32,7 @@ Exige aprobación explícita en la spec si se quiere usar: `cmd`/PowerShell 5.1 
 - Formato: UTF-8, `Join-Path` para rutas, `[CmdletBinding(SupportsShouldProcess=$true)]` en todo entry/module que cambie el sistema.
 - Nombres: `PascalCase` en funciones (`Invoke-InstallCategory`, `Write-InstallLog`), `kebab-case` en carpetas de specs (`specs/001-instalador-win11/`), `UPPER` en flags globales (`$global:InstallHadErrors`).
 - Estructura: `install.ps1`, `bootstrap.ps1`, `config/`, `modules/`, `tests/`, `logs/`, `docs/constitution.md`, `specs/NNN-nombre/spec.md|plan.md|tasks.md`, `AGENTS.md` en raíz.
-- Idioma: español en docs, mensajes, logs y comentarios de usuario; inglés solo en IDs winget, comandos y código heredado de `bootstrap.ps1`. La futura internacionalización total a inglés requiere cambio de spec (v2).
+- Idioma: español en docs y respuestas; inglés en código (comentarios, mensajes y logs, v2 RF-15) además de IDs winget y comandos.
 
 ## Verificación obligatoria
 

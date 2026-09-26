@@ -1,8 +1,8 @@
-# Common.ps1 - Funciones compartidas del instalador.
-# Requiere PowerShell 7+. No ejecuta nada al importarse salvo inicializar la ruta de log.
+# Common.ps1 - Shared installer functions.
+# Requires PowerShell 7+. Importing only defines functions and the log path.
 
-# Ruta del log de la ejecución actual. Se fija una sola vez por proceso
-# para que todas las llamadas a Write-InstallLog escriban al mismo archivo fechado.
+# Current run log path. Set once per process so every
+# Write-InstallLog call appends to the same timestamped file.
 $script:InstallLogPath = $null
 
 function Initialize-InstallLog {
@@ -13,7 +13,7 @@ function Initialize-InstallLog {
         return $script:InstallLogPath
     }
 
-    # $PSScriptRoot aquí (ámbito de script) es la carpeta modules/.
+    # $PSScriptRoot in script scope is the modules/ folder.
     $repoRoot = Split-Path -Parent $PSScriptRoot
     $logsDir = Join-Path -Path $repoRoot -ChildPath "logs"
     if (-not (Test-Path $logsDir)) {
@@ -41,8 +41,7 @@ function Write-InstallLog {
 
     Add-Content -Path $logPath -Value $logLine -Encoding UTF8
 
-    # Reflejar errores y avisos también en consola para visibilidad inmediata.
-    # Marcar flag global para que install.ps1 pueda salir con codigo 1 si hubo errores.
+    # Mirror errors/warnings to the console and flag the run as failed on ERROR.
     if ($Level -eq "ERROR") {
         $global:InstallHadErrors = $true
         Write-Error $Message
@@ -65,7 +64,7 @@ function Test-AppInstalled {
         return $false
     }
 
-    # $AppId contiene puntos (p. ej. Brave.Brave): escapar para no tratarlos como regex.
+    # $AppId contains dots (e.g. Brave.Brave): escape them so they match literally.
     $pattern = [regex]::Escape($AppId)
     if ($output | Select-String -Pattern $pattern -Quiet) {
         return $true
@@ -83,30 +82,30 @@ function Install-WingetApp {
         [string]$AppName
     )
 
-    # Idempotencia: omitir si ya está instalado.
+    # Idempotency: skip when already installed.
     if (Test-AppInstalled -AppId $AppId) {
-        Write-InstallLog -Message "El programa $AppName ($AppId) ya esta instalado. Omitiendo." -Level "INFO"
+        Write-InstallLog -Message "Program $AppName ($AppId) is already installed. Skipping." -Level "INFO"
         return
     }
 
-    if ($PSCmdlet.ShouldProcess($AppName, "Instalar mediante winget")) {
-        Write-InstallLog -Message "Iniciando instalacion de $AppName ($AppId)..." -Level "INFO"
+    if ($PSCmdlet.ShouldProcess($AppName, "Install via winget")) {
+        Write-InstallLog -Message "Starting installation of $AppName ($AppId)..." -Level "INFO"
 
         winget install --exact --id $AppId --accept-source-agreements --accept-package-agreements --silent
         $wingetExit = $LASTEXITCODE
 
         if ($wingetExit -ne 0) {
-            Write-InstallLog -Message "winget devolvio codigo $wingetExit al instalar: $AppName ($AppId). Revisa la consola." -Level "ERROR"
+            Write-InstallLog -Message "winget returned exit code $wingetExit while installing: $AppName ($AppId). Check the console output." -Level "ERROR"
             return
         }
 
-        # Verificación final (puede tardar en reflejarse en PATH/registro).
+        # Post-install check (winget list may lag behind PATH/registry).
         if (Test-AppInstalled -AppId $AppId) {
-            Write-InstallLog -Message "Instalacion exitosa: $AppName" -Level "INFO"
+            Write-InstallLog -Message "Installation succeeded: $AppName" -Level "INFO"
         } else {
-            Write-InstallLog -Message "Error al instalar: $AppName ($AppId). winget termino sin error pero la app no aparece en 'winget list'." -Level "ERROR"
+            Write-InstallLog -Message "Failed to install: $AppName ($AppId). winget exited cleanly but the app is not listed by 'winget list'." -Level "ERROR"
         }
     } else {
-        Write-InstallLog -Message "Modo simulacion activado. Se instalaria: $AppName ($AppId)" -Level "INFO"
+        Write-InstallLog -Message "Simulation mode. Would install: $AppName ($AppId)" -Level "INFO"
     }
 }

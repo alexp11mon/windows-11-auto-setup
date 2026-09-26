@@ -31,8 +31,8 @@ Describe 'install.ps1 entry guards' {
     It 'Omite Git/VSCode con switches sin preguntar' {
         $script:Entry | Should -Match '\[switch\]\$SkipGit'
         $script:Entry | Should -Match '\[switch\]\$SkipVSCode'
-        $script:Entry | Should -Match 'omitida por flag -SkipGit'
-        $script:Entry | Should -Match 'omitida por flag -SkipVSCode'
+        $script:Entry | Should -Match 'skipped via -SkipGit'
+        $script:Entry | Should -Match 'skipped via -SkipVSCode'
     }
     It 'Propaga errores con InstallHadErrors y exit 1' {
         $script:Entry | Should -Match 'InstallHadErrors'

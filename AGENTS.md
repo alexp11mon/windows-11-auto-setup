@@ -43,12 +43,12 @@ Salidas: `0` ok, `1` falta admin/OS/winget/módulo o cualquier `ERROR` en `logs/
 - `modules/Install-Category.ps1`: expande `All`, sin doble `ShouldProcess`.
 - `modules/Config-Git.ps1`: omite si no hay `git`; en `-WhatIf` sin datos no pregunta; valida email regex; aplica `main` + alias `tree`.
 - `modules/Config-VSCode.ps1`: instala ausentes con `code --install-extension --force`.
-- `tests/Runner-Mock.ps1`: suite sin dependencias (102 checks, todo mockeado). `tests/*.Tests.ps1`: Pester 5.
+- `tests/Runner-Mock.ps1`: suite sin dependencias (104 checks, todo mockeado). `tests/*.Tests.ps1`: Pester 5+.
 - `docs/constitution.md`: ley del proyecto. `specs/001-instalador-win11/{spec,plan,tasks}.md`: contrato SDD. `docs/estructura-proyecto.md`: mapa carpetas.
 
 ## Convenciones para IA
 
-- Español en docs, mensajes, logs y respuestas. Inglés solo en IDs winget/comandos. v2 prevé inglés en código (ver `tasks.md` T9).
+- Español en docs y respuestas. Código en inglés (comentarios, mensajes y logs, ver `tasks.md` T9); inglés también en IDs winget/comandos.
 - `PascalCase` funciones, `Join-Path` siempre, `[CmdletBinding(SupportsShouldProcess=$true)]` en todo lo que cambie el sistema.
 - JSON en UTF-8, sin comentarios. Comentarios de código concisos, sin restos obvios de IA (v2 T8).
 - Prohibido: `choco`/`scoop`/`.exe` manuales, módulos PSGallery en instalación, credenciales/tokens, soporte Win10/Linux/macOS, cerrar consola bajo `iex`.
@@ -74,5 +74,5 @@ Toda tarea de código exige su test primero o cita el test que la cierra. Si toc
 ## Al revisar / implementar
 
 - Si un RF es inviable, repórtalo y detente; no cambies la spec en silencio.
-- Si el diff toca mensajes de usuario, mantén español (hasta T9). Si toca docs SDD, actualiza trazabilidad RF→módulo→tarea.
+- Si el diff toca mensajes de usuario, mantén inglés (desde T9). Si toca docs SDD, actualiza trazabilidad RF→módulo→tarea.
 - `logs/*.log` ignorados por git; no los commitees. No commitees `%TEMP%\win11-setup-*`.

@@ -60,7 +60,7 @@ Funciones PowerShell:
 - `Config-VSCode.ps1`: `Invoke-VSCodeConfig -ExtensionsConfigPath`; instala extensiones ausentes con `code --install-extension` y verifica el resultado.
 
 ### `tests/`
-Suite mockeada sin dependencias (`Runner-Mock.ps1`, 102 checks: sintaxis, JSON, winget/Git/VSCode con mocks, guards del entry, bootstrap y menú) + tests Pester 5 por módulo (`Common`, `Install-Category`, `Config-Git`, `Config-VSCode`, `Install.Entry`, `Bootstrap.Entry`). No instalan nada. Requieren Pester 5 solo para los `*.Tests.ps1`.
+Suite mockeada sin dependencias (`Runner-Mock.ps1`, 104 checks: sintaxis, JSON, winget/Git/VSCode con mocks, guards del entry, bootstrap y menú) + tests Pester 5+ por módulo (`Common`, `Install-Category`, `Config-Git`, `Config-VSCode`, `Install.Entry`, `Bootstrap.Entry`). No instalan nada. Requieren Pester 5+ solo para los `*.Tests.ps1`.
 
 ### `logs/`
 Un `.log` fechado por ejecución (`install-YYYYMMDD-HHmmss.log`). Qué fue instalado y qué falló. Los `*.log` están ignorados por git; la carpeta se conserva con `.gitkeep`.
