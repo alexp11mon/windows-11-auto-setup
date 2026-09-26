@@ -10,10 +10,12 @@ Spec: `specs/002-opencode-brave-v2/spec.md`. Plan: `specs/002-opencode-brave-v2/
 - [x] T13 Versionar catálogo de extensiones de Brave
   Hecho cuando: `config/brave/extensions.json` es JSON válido con las 5 extensiones (uBlock Origin Lite, Dark Reader, Decentraleyes, Bitwarden, Privacy Badger). Cubre: RF-22 | Módulo: config/brave
   Verificado: 2026-09-26, JSON válido con 5 IDs de 32 chars, suite 104/104.
-- [ ] T14 Implementar `Config-OpenCode` con tests primero
+- [x] T14 Implementar `Config-OpenCode` con tests primero
   Hecho cuando: `pwsh -NoProfile -File tests/Runner-Mock.ps1` en verde y `Config-OpenCode.Tests.ps1` en verde (detección, install oficial mockeado con reintento, fusión conserva-con-aviso, omisión de secretos, `-WhatIf` sin efectos). Cubre: RF-17, RF-18, RF-19, RF-20, RF-21, RF-25, RF-26 | Módulo: Config-OpenCode
-- [ ] T15 Implementar `Config-Brave` con tests primero
+  Verificado: 2026-09-26, Runner 148/148 (Bloque 9: 27 checks) + Pester 8/8. Hallazgos: Pester 6 no mockea `opencode` (.ps1 externo) → overrides con `function`; `AfterEach` dentro de `Describe`; fixtures de descarga con switch `-UseBasicParsing`; overrides de `Get-Command` en ámbito script.
+- [x] T15 Implementar `Config-Brave` con tests primero
   Hecho cuando: `pwsh -NoProfile -File tests/Runner-Mock.ps1` en verde y `Config-Brave.Tests.ps1` en verde (Brave ausente → instalar primero, idempotencia por extensión, aviso de reinicio, `-WhatIf` sin efectos). Cubre: RF-22, RF-23, RF-26 | Módulo: Config-Brave
+  Verificado: 2026-09-26, Runner 148/148 (Bloque 10: 16 checks) + Pester 6/6. Registro real solo en clave HKCU temporal con limpieza; reuso de `Install-WingetApp` para RF-23 (sin doble `ShouldProcess`, patrón D3).
 - [ ] T16 Integrar flags y menú en `install.ps1` y `bootstrap.ps1`
   Hecho cuando: `.\install.ps1 -Category All -WhatIf` y `.\bootstrap.ps1 -Category All -WhatIf` con salida 0, `-SkipOpenCode`/`-SkipBrave` omiten su bloque, y cancelar el menú nuevo sale con 0 sin cambios. Cubre: RF-24, RF-26 | Módulo: install.ps1, bootstrap.ps1
 - [ ] T17 Actualizar docs y enmienda P2

@@ -30,7 +30,8 @@ Dos módulos nuevos dot-sourced (`Config-OpenCode`, `Config-Brave`) + datos vers
 
 - `.\install.ps1 [-Category Base|Dev|Gaming|All] [...flags v1...] [-SkipOpenCode] [-SkipBrave] [-WhatIf]` → salida 0 ok, 1 si cualquier `ERROR` (incluido fallo persistente del instalador oficial).
 - `.\bootstrap.ps1 [mismos flags install + -SkipOpenCode -SkipBrave + -Repo -Branch -KeepDownload] [-WhatIf]` → en `-WhatIf` anuncia lo que haría con OpenCode/Brave; menú nuevo con omisiones y cancelación en 0.
-- `Invoke-OpenCodeConfig -ConfigSourcePath`, `Invoke-BraveConfig -ExtensionsConfigPath`, mismos niveles `INFO|WARNING|ERROR` de `Write-InstallLog`.
+- `Invoke-OpenCodeConfig -ConfigSourcePath [-DestinationRoot = "$HOME/.config/opencode"]`, `Invoke-BraveConfig -ExtensionsConfigPath [-PolicyRoot = HKLM ExtensionInstallForcelist]`, mismos niveles `INFO|WARNING|ERROR` de `Write-InstallLog`.
+- Addendum ratificado en implementación (T14/T15): params opcionales con defaults reales para testear sin tocar HKLM ni HOME; instalador oficial descargado a `%TEMP%` con 2 intentos y ejecutado (D9/D13); tests de registro contra clave HKCU temporal con limpieza garantizada.
 - Detección OpenCode: comando disponible y comprobación de versión con salida 0 → instalado; si no → no instalado (incluye el caso límite "presente pero versión falla").
 - Errores: instalador oficial con salida != 0 tras reintento → `ERROR` y continúa; Brave ausente → se instala primero vía winget (categoría Base ya lo incluye) y después se aplican extensiones.
 

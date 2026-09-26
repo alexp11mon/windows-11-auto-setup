@@ -40,6 +40,8 @@ function Reset-Capture {
 . (Join-Path $ModulesDir 'Install-Category.ps1')
 . (Join-Path $ModulesDir 'Config-Git.ps1')
 . (Join-Path $ModulesDir 'Config-VSCode.ps1')
+. (Join-Path $ModulesDir 'Config-OpenCode.ps1')
+. (Join-Path $ModulesDir 'Config-Brave.ps1')
 
 Write-Output '=== TEST GENERAL MOCKEADO - Instalador ==='
 Write-Output "Repo: $RepoRoot"
@@ -50,7 +52,7 @@ Write-Output ''
 # BLOQUE 1: Sintaxis + JSON (checks estaticos re-ejecutados en harness)
 # ---------------------------------------------------------------------------
 Write-Output '--- Bloque 1: Estatico ---'
-foreach ($f in @('install.ps1','modules/Common.ps1','modules/Install-Category.ps1','modules/Config-Git.ps1','modules/Config-VSCode.ps1')) {
+foreach ($f in @('install.ps1','modules/Common.ps1','modules/Install-Category.ps1','modules/Config-Git.ps1','modules/Config-VSCode.ps1','modules/Config-OpenCode.ps1','modules/Config-Brave.ps1')) {
     $full = Join-Path $RepoRoot $f
     $errs = $null; $toks = $null
     [void][System.Management.Automation.Language.Parser]::ParseFile($full, [ref]$toks, [ref]$errs)
@@ -95,6 +97,8 @@ Remove-Item $tempLog -Force -ErrorAction SilentlyContinue
 . (Join-Path $ModulesDir 'Install-Category.ps1')
 . (Join-Path $ModulesDir 'Config-Git.ps1')
 . (Join-Path $ModulesDir 'Config-VSCode.ps1')
+. (Join-Path $ModulesDir 'Config-OpenCode.ps1')
+. (Join-Path $ModulesDir 'Config-Brave.ps1')
 
 # Flag de errores: ERROR marca InstallHadErrors, INFO no (log real en logs/, se limpia)
 $global:InstallHadErrors = $false
@@ -452,6 +456,234 @@ if ($boot -match '(?s)(function Show-NumberedMenu \{.*?\n\})\s*\$ZipUrl') {
 } else {
     Test-Assert $false 'Show-NumberedMenu extraible de bootstrap.ps1' ''
 }
+
+# ---------------------------------------------------------------------------
+# BLOQUE 9: Config-OpenCode mockeado (sin red, sin HOME real, todo en TEMP)
+# ---------------------------------------------------------------------------
+Write-Output ''
+Write-Output '--- Bloque 9: Config-OpenCode ---'
+$OpenCodeSnapshot = Join-Path $RepoRoot 'config/opencode'
+$MockTempBase = Join-Path ([System.IO.Path]::GetTempPath()) 'oc-mock'
+$global:MockOpencodeExit = 0
+$global:MockDownloadCalls = 0
+$global:MockDownloadFailCount = 0
+$global:MockInstallerExit = 0
+$global:MockInstallerRan = $false
+function opencode {
+    param()
+    $global:LASTEXITCODE = $global:MockOpencodeExit
+}
+function Invoke-WebRequest {
+    param($Uri, $OutFile, [switch]$UseBasicParsing, [Parameter(ValueFromRemainingArguments = $true)]$Rest)
+    $global:MockDownloadCalls++
+    if ($global:MockDownloadCalls -le $global:MockDownloadFailCount) { throw 'mock network failure' }
+    ('$global:MockInstallerRan = $true; exit ' + $global:MockInstallerExit) | Set-Content -Path $OutFile -Encoding UTF8
+}
+# Script-scope override (a helper function would scope it locally and lose it on return).
+$global:MockOpencodePresent = $true
+function Get-Command {
+    param([Parameter(Position = 0)]$Name, [Parameter(ValueFromRemainingArguments = $true)]$Rest)
+    if ($Name -eq 'opencode') {
+        if ($global:MockOpencodePresent) { return @{ Name = 'opencode' } } else { return $null }
+    }
+    Microsoft.PowerShell.Core\Get-Command -Name $Name @Rest -ErrorAction SilentlyContinue
+}
+
+# Presente: no descarga, aplica config en TEMP
+$global:MockOpencodePresent = $true
+Reset-Capture; $global:MockDownloadCalls = 0; $global:MockOpencodeExit = 0
+$destPresent = Join-Path $MockTempBase 'present'
+Remove-Item $destPresent -Recurse -Force -ErrorAction SilentlyContinue
+Invoke-OpenCodeConfig -ConfigSourcePath $OpenCodeSnapshot -DestinationRoot $destPresent
+Test-Assert ($global:MockDownloadCalls -eq 0) 'OpenCode presente no descarga instalador'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'already installed') 'OpenCode presente loguea omitido'
+Test-Assert (Test-Path (Join-Path $destPresent 'opencode.jsonc')) 'OpenCode presente aplica config en destino'
+
+# Ausente: 1 descarga, stub ejecuta, succeeded
+$global:MockOpencodePresent = $false
+Reset-Capture; $global:MockDownloadCalls = 0; $global:MockDownloadFailCount = 0; $global:MockInstallerExit = 0; $global:MockInstallerRan = $false
+$destAbsent = Join-Path $MockTempBase 'absent'
+Remove-Item $destAbsent -Recurse -Force -ErrorAction SilentlyContinue
+Invoke-OpenCodeConfig -ConfigSourcePath $OpenCodeSnapshot -DestinationRoot $destAbsent
+Test-Assert ($global:MockDownloadCalls -eq 1) 'OpenCode ausente descarga 1 vez'
+Test-Assert ($global:MockInstallerRan -eq $true) 'OpenCode ausente ejecuta instalador descargado'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'succeeded') 'OpenCode ausente verifica version y loguea exito'
+
+# Version rota (exit 1) se trata como ausente
+$global:MockOpencodePresent = $true
+Reset-Capture; $global:MockDownloadCalls = 0; $global:MockOpencodeExit = 1
+Invoke-OpenCodeConfig -ConfigSourcePath $OpenCodeSnapshot -DestinationRoot (Join-Path $MockTempBase 'broken')
+Test-Assert ($global:MockDownloadCalls -eq 1) 'Version rota descarga como si ausente'
+$global:MockOpencodeExit = 0
+
+# Doble fallo de descarga => ERROR y continua
+$global:MockOpencodePresent = $false
+Reset-Capture; $global:MockDownloadCalls = 0; $global:MockDownloadFailCount = 2
+Invoke-OpenCodeConfig -ConfigSourcePath $OpenCodeSnapshot -DestinationRoot (Join-Path $MockTempBase 'dlerror')
+Test-Assert ($global:MockDownloadCalls -eq 2) 'Descarga reintenta 1 vez (2 intentos)'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'Could not download') 'Doble fallo loguea ERROR y continua'
+
+# Fallo simple + exito => 2 llamadas y succeeded
+Reset-Capture; $global:MockDownloadCalls = 0; $global:MockDownloadFailCount = 1; $global:MockInstallerExit = 0; $global:MockInstallerRan = $false
+Invoke-OpenCodeConfig -ConfigSourcePath $OpenCodeSnapshot -DestinationRoot (Join-Path $MockTempBase 'retry')
+Test-Assert ($global:MockDownloadCalls -eq 2) 'Reintento descarga tras fallo simple'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'succeeded') 'Reintento con exito loguea succeeded'
+
+# Instalador con exit !=0 => ERROR
+Reset-Capture; $global:MockDownloadCalls = 0; $global:MockDownloadFailCount = 0; $global:MockInstallerExit = 3
+Invoke-OpenCodeConfig -ConfigSourcePath $OpenCodeSnapshot -DestinationRoot (Join-Path $MockTempBase 'badexit')
+Test-Assert (($script:CapturedLogs -join "`n") -match 'exit code 3') 'Instalador con exit 3 loguea ERROR'
+$global:MockInstallerExit = 0
+
+# Fusion: identico se omite, distinto se conserva con aviso
+Reset-Capture
+$destMerge = Join-Path $MockTempBase 'merge'
+$mergeAgents = Join-Path $destMerge 'agents'
+New-Item -ItemType Directory -Path $mergeAgents -Force | Out-Null
+Copy-Item -Path (Join-Path $OpenCodeSnapshot 'agents/sdd-orchestrator.md') -Destination (Join-Path $mergeAgents 'sdd-orchestrator.md') -Force
+Set-Content -Path (Join-Path $destMerge 'opencode.jsonc') -Value '{"custom":true}' -Encoding UTF8
+Invoke-OpenCodeConfig -ConfigSourcePath $OpenCodeSnapshot -DestinationRoot $destMerge
+Test-Assert (($script:CapturedLogs -join "`n") -match 'already applied') 'Fusion omite fichero identico'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'Keeping existing') 'Fusion conserva distinto con aviso'
+Test-Assert ((Get-Content (Join-Path $destMerge 'opencode.jsonc') -Raw) -match 'custom') 'Fusion no sobrescribe el fichero del usuario'
+
+# Secreto en origen se omite con aviso, resto se aplica
+Reset-Capture
+$srcSecret = Join-Path $MockTempBase 'src-secret'
+$destSecret = Join-Path $MockTempBase 'dest-secret'
+New-Item -ItemType Directory -Path $srcSecret -Force | Out-Null
+Set-Content -Path (Join-Path $srcSecret 'evil.md') -Value 'api_key = 12345' -Encoding UTF8
+Set-Content -Path (Join-Path $srcSecret 'good.md') -Value 'hello' -Encoding UTF8
+Invoke-OpenCodeConfig -ConfigSourcePath $srcSecret -DestinationRoot $destSecret
+Test-Assert (-not (Test-Path (Join-Path $destSecret 'evil.md'))) 'Fichero con secreto no se copia'
+Test-Assert (Test-Path (Join-Path $destSecret 'good.md')) 'Resto se aplica aunque haya secreto'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'possible secret') 'Secreto loguea WARNING y continua'
+
+# Origen inexistente => ERROR
+Reset-Capture
+Invoke-OpenCodeConfig -ConfigSourcePath (Join-Path $RepoRoot 'config/noexiste') -DestinationRoot (Join-Path $MockTempBase 'nosrc')
+Test-Assert (($script:CapturedLogs -join "`n") -match 'not found') 'Origen inexistente loguea ERROR'
+
+# WhatIf: 0 descargas, destino intacto, simulacion
+$global:MockOpencodePresent = $false
+Reset-Capture; $global:MockDownloadCalls = 0
+$destWhatIf = Join-Path $MockTempBase 'whatif'
+Remove-Item $destWhatIf -Recurse -Force -ErrorAction SilentlyContinue
+Invoke-OpenCodeConfig -ConfigSourcePath $OpenCodeSnapshot -DestinationRoot $destWhatIf -WhatIf
+Test-Assert ($global:MockDownloadCalls -eq 0) 'WhatIf no descarga instalador'
+Test-Assert (-not (Test-Path $destWhatIf)) 'WhatIf no crea destino ni copia'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'Simulation') 'WhatIf loguea simulacion'
+
+# Snapshot del repo valido: jsonc parseable, 12 ficheros, sin secretos
+$ocFiles = @(Get-ChildItem $OpenCodeSnapshot -Recurse -File)
+Test-Assert ($ocFiles.Count -eq 12) "Snapshot tiene 12 ficheros (real=$($ocFiles.Count))"
+$ocJsoncOk = $true
+try { $null = Get-Content (Join-Path $OpenCodeSnapshot 'opencode.jsonc') -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $ocJsoncOk = $false }
+Test-Assert $ocJsoncOk 'opencode.jsonc del snapshot es JSON valido'
+$ocText = ($ocFiles | ForEach-Object { Get-Content $_ -Raw -ErrorAction SilentlyContinue }) -join "`n"
+Test-Assert ($ocText -notmatch 'token|password|secret|api[_-]?key') 'Snapshot sin secretos ni tokens'
+Test-Assert ($ocText -notmatch 'gemini') 'Snapshot sin referencias a Gemini'
+
+Remove-Item function:\opencode -ErrorAction SilentlyContinue
+Remove-Item function:\Invoke-WebRequest -ErrorAction SilentlyContinue
+Remove-Item function:\Get-Command -ErrorAction SilentlyContinue
+Remove-Item $MockTempBase -Recurse -Force -ErrorAction SilentlyContinue
+
+# ---------------------------------------------------------------------------
+# BLOQUE 10: Config-Brave mockeado (registro real solo en clave HKCU temporal)
+# ---------------------------------------------------------------------------
+Write-Output ''
+Write-Output '--- Bloque 10: Config-Brave ---'
+$BraveExtConfig = Join-Path $RepoRoot 'config/brave/extensions.json'
+$MockPolicyBase = 'HKCU:\Software\Win11InstallerTest'
+Remove-Item $MockPolicyBase -Recurse -Force -ErrorAction SilentlyContinue
+$global:MockBraveInstalled = $true
+$global:MockBraveInstallCalls = @()
+function Test-AppInstalled {
+    param([string]$AppId)
+    return $global:MockBraveInstalled
+}
+function Install-WingetApp {
+    param([string]$AppId, [string]$AppName)
+    $global:MockBraveInstallCalls += $AppId
+    $global:MockBraveInstalled = $true
+}
+function Get-PolicyValues {
+    param([string]$Root)
+    return @((Get-ItemProperty -Path $Root -ErrorAction SilentlyContinue).PSObject.Properties |
+        Where-Object { $_.Name -match '^\d+$' } |
+        Select-Object -ExpandProperty Value)
+}
+
+# Presente + 1 preexistente: aplica 4, omite 1
+Reset-Capture; $global:MockBraveInstalled = $true; $global:MockBraveInstallCalls = @()
+$rootEnforce = Join-Path $MockPolicyBase 'enforce'
+New-Item -Path $rootEnforce -Force | Out-Null
+New-ItemProperty -Path $rootEnforce -Name '1' -Value 'nngceckbapebfimnlniiiahkandclblb;https://clients2.google.com/service/update2/crx' -Force | Out-Null
+Invoke-BraveConfig -ExtensionsConfigPath $BraveExtConfig -PolicyRoot $rootEnforce
+Test-Assert ((Get-PolicyValues $rootEnforce).Count -eq 5) 'Brave aplica ausentes hasta 5 valores'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'already enforced') 'Brave omite preexistente (idempotente)'
+Test-Assert ($global:MockBraveInstallCalls.Count -eq 0) 'Brave presente no reinstala Brave'
+
+# Ausente: instala Brave primero y luego aplica
+Reset-Capture; $global:MockBraveInstalled = $false; $global:MockBraveInstallCalls = @()
+$rootFirst = Join-Path $MockPolicyBase 'install-first'
+Invoke-BraveConfig -ExtensionsConfigPath $BraveExtConfig -PolicyRoot $rootFirst
+Test-Assert ($global:MockBraveInstallCalls -contains 'Brave.Brave') 'Brave ausente lo instala primero'
+Test-Assert ((Get-PolicyValues $rootFirst).Count -eq 5) 'Tras instalar Brave aplica las 5'
+
+# Ausente y sin instalar: WARNING y no escribe
+Reset-Capture; $global:MockBraveInstallCalls = @()
+function Install-WingetApp {
+    param([string]$AppId, [string]$AppName)
+    $global:MockBraveInstallCalls += $AppId
+}
+$global:MockBraveInstalled = $false
+$rootNoBrave = Join-Path $MockPolicyBase 'no-brave'
+Invoke-BraveConfig -ExtensionsConfigPath $BraveExtConfig -PolicyRoot $rootNoBrave
+Test-Assert (($script:CapturedLogs -join "`n") -match 'Skipping') 'Sin Brave omite con aviso'
+Test-Assert (-not (Test-Path $rootNoBrave)) 'Sin Brave no escribe en registro'
+$global:MockBraveInstalled = $true
+
+# ID invalido se omite, resto se aplica
+Reset-Capture
+$srcBadId = Join-Path ([System.IO.Path]::GetTempPath()) 'brave-badid.json'
+'{"extensions": [{"id": "zzz", "name": "Bad"}, {"id": "ddkjiahejlhfcafbddmgiahcphecmpfh", "name": "uBlock Origin Lite"}]}' | Set-Content -Path $srcBadId -Encoding UTF8
+$rootBadId = Join-Path $MockPolicyBase 'bad-id'
+Invoke-BraveConfig -ExtensionsConfigPath $srcBadId -PolicyRoot $rootBadId
+Test-Assert (($script:CapturedLogs -join "`n") -match 'invalid') 'ID invalido loguea WARNING'
+Test-Assert ((Get-PolicyValues $rootBadId).Count -eq 1) 'ID invalido no bloquea al resto'
+Remove-Item $srcBadId -Force -ErrorAction SilentlyContinue
+
+# Fichero inexistente y JSON invalido => ERROR
+Reset-Capture
+Invoke-BraveConfig -ExtensionsConfigPath (Join-Path $RepoRoot 'config/noexiste.json') -PolicyRoot (Join-Path $MockPolicyBase 'no-file')
+Test-Assert (($script:CapturedLogs -join "`n") -match 'not found') 'Fichero inexistente loguea ERROR'
+$srcBadJson = Join-Path ([System.IO.Path]::GetTempPath()) 'brave-badjson.json'
+'{no json' | Set-Content -Path $srcBadJson -Encoding UTF8
+Reset-Capture
+Invoke-BraveConfig -ExtensionsConfigPath $srcBadJson -PolicyRoot (Join-Path $MockPolicyBase 'bad-json')
+Test-Assert (($script:CapturedLogs -join "`n") -match 'not valid JSON') 'JSON invalido loguea ERROR'
+Remove-Item $srcBadJson -Force -ErrorAction SilentlyContinue
+
+# WhatIf no escribe
+Reset-Capture
+$rootWhatIf = Join-Path $MockPolicyBase 'whatif'
+Invoke-BraveConfig -ExtensionsConfigPath $BraveExtConfig -PolicyRoot $rootWhatIf -WhatIf
+Test-Assert (-not (Test-Path $rootWhatIf)) 'WhatIf no escribe en registro'
+Test-Assert (($script:CapturedLogs -join "`n") -match 'Simulation') 'WhatIf loguea simulacion'
+
+# Catalogo del repo valido: 5 entradas, IDs de 32 chars, sin duplicados
+$braveData = Get-Content $BraveExtConfig -Raw -Encoding UTF8 | ConvertFrom-Json
+Test-Assert ($braveData.extensions.Count -eq 5) "Catalogo Brave tiene 5 (real=$($braveData.extensions.Count))"
+Test-Assert ((($braveData.extensions.id | Sort-Object -Unique).Count) -eq 5) 'Catalogo Brave sin duplicados'
+Test-Assert (($braveData.extensions.id | Where-Object { $_ -notmatch '^[a-z]{32}$' }).Count -eq 0) 'Catalogo Brave con IDs validos'
+
+Remove-Item function:\Test-AppInstalled -ErrorAction SilentlyContinue
+Remove-Item function:\Install-WingetApp -ErrorAction SilentlyContinue
+Remove-Item function:\Get-PolicyValues -ErrorAction SilentlyContinue
+. (Join-Path $ModulesDir 'Common.ps1')
+Remove-Item $MockPolicyBase -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Output ''
 Write-Output '=== RESUMEN ==='
