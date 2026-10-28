@@ -4,7 +4,9 @@ BeforeAll {
     $script:BootPath = Join-Path $RepoRoot 'bootstrap.ps1'
     $script:Boot = Get-Content $script:BootPath -Raw
     $bootAst = [System.Management.Automation.Language.Parser]::ParseFile($script:BootPath, [ref]$null, [ref]$null)
-    foreach ($fn in @('ConvertTo-PSLiteral', 'Get-ElevatedCommand', 'Save-RunLogs')) {
+    $script:AppsData = Get-Content (Join-Path $RepoRoot 'config/apps.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    $script:AppsPath = Join-Path $RepoRoot 'config/apps.json'
+    foreach ($fn in @('ConvertTo-PSLiteral', 'Get-ElevatedCommand', 'Save-RunLogs', 'Show-Menu', 'Get-ConfigScope', 'Read-MenuKey')) {
         $fnAst = $bootAst.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $fn }, $true)
         . ([scriptblock]::Create($fnAst.Extent.Text))
     }
@@ -107,6 +109,51 @@ exit 7
         Remove-Item (Join-Path $TestDrive 'repo') -Recurse -Force
         Test-Path (Join-Path $dst 'install-1.log') | Should -BeTrue
         $script:Boot.IndexOf('Save-RunLogs -SourceDir') | Should -BeLessThan $script:Boot.LastIndexOf('Remove-Item -Path $workDir')
+    }
+    Context 'Menu keys (spec 004)' {
+        BeforeEach {
+            function Clear-Host { }
+            function Invoke-Keys {
+                param([string[]]$Keys, [string[]]$Options, [switch]$Multi, [switch]$Preselected)
+                $script:Keys = [System.Collections.Generic.Queue[string]]::new([string[]]$Keys)
+                Show-Menu -Title 'T' -Options $Options -Multi:$Multi -Preselected:$Preselected 6>$null
+            }
+            Mock Read-MenuKey { [pscustomobject]@{ Key = $script:Keys.Dequeue() } }
+        }
+        It 'Enter with nothing marked picks the highlighted item (RF-43)' {
+            $picked = Invoke-Keys -Keys 'DownArrow', 'Enter' -Options 'A', 'B', 'C' -Multi
+            $picked.Count | Should -Be 1
+            $picked | Should -Be 'B'
+        }
+        It 'Preselected list confirms everything with Enter (RF-44)' {
+            $picked = Invoke-Keys -Keys 'Enter' -Options 'A', 'B' -Multi -Preselected
+            $picked.Count | Should -Be 2
+            $picked | Should -Be @('A', 'B')
+        }
+        It 'Unmarking everything and pressing Enter cancels (RF-46)' {
+            Invoke-Keys -Keys 'Spacebar', 'DownArrow', 'Spacebar', 'Enter' -Options 'A', 'B' -Multi -Preselected | Should -BeNullOrEmpty
+        }
+    }
+    It 'Get-ConfigScope follows the selected apps (RF-47, RF-48)' {
+        $s = Get-ConfigScope -Category 'All' -Apps 'Valve.Steam' -AppsData $script:AppsData
+        @($s.Git, $s.VSCode, $s.OpenCode, $s.Brave) | Should -Be @($false, $false, $false, $false)
+        $s = Get-ConfigScope -Category 'All' -Apps 'Microsoft.VisualStudioCode', 'Brave.Brave' -AppsData $script:AppsData
+        @($s.Git, $s.VSCode, $s.OpenCode, $s.Brave) | Should -Be @($false, $true, $true, $true)
+        $s = Get-ConfigScope -Category 'Gaming' -AppsData $script:AppsData
+        @($s.Git, $s.VSCode, $s.OpenCode, $s.Brave) | Should -Be @($false, $false, $false, $false)
+    }
+    It 'Gaming menu lists its apps and asks nothing about Git/VSCode/OpenCode (RF-44, RF-45, RF-47)' {
+        $childCmd = @"
+`$global:MenuAnswers = [System.Collections.Generic.Queue[string]]::new([string[]]@('4', '1,2,4', '2'))
+function Read-Host { param(`$Prompt) if (`$global:MenuAnswers.Count) { `$global:MenuAnswers.Dequeue() } else { '' } }
+function Invoke-RestMethod { param(`$Uri) Get-Content -Raw '$($script:AppsPath)' -Encoding UTF8 | ConvertFrom-Json }
+Get-Content -Raw '$($script:BootPath)' | Invoke-Expression
+"@
+        $out = '' | & pwsh -NoProfile -EncodedCommand ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childCmd))) *>&1 | Out-String
+        $out | Should -Not -Match 'Custom per-app'
+        $out | Should -Match 'Apps to install \(Gaming\)'
+        $out | Should -Not -Match 'Git configuration\?'
+        $out | Should -Match 'Category=Gaming Apps=3 Git=skipped VSCode=skipped OpenCode=skipped Brave=skipped'
     }
     It 'Verifies -Sha256 before extracting (RF-32)' {
         $pattern = ((Get-Command $script:BootPath).Parameters['Sha256'].Attributes | Where-Object { $_ -is [System.Management.Automation.ValidatePatternAttribute] }).RegexPattern

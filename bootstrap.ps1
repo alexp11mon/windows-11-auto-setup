@@ -91,18 +91,47 @@ function Save-RunLogs {
     Write-Host "Logs saved to: $Destination" -ForegroundColor Cyan
 }
 
+function Get-ConfigScope {
+    # Which config blocks apply. Without a selection it mirrors install.ps1's
+    # category gating; with one, each block follows the app it configures.
+    param (
+        [string]$Category,
+        [string[]]$Apps = @(),
+        $AppsData
+    )
+    if ($Apps.Count -eq 0) {
+        $dev = $Category -in @('Dev', 'All')
+        return @{ Git = $dev; VSCode = $dev; OpenCode = $dev; Brave = $Category -in @('Base', 'All') }
+    }
+    @{
+        Git      = $Apps -contains 'Git.Git'
+        VSCode   = $Apps -contains 'Microsoft.VisualStudioCode'
+        Brave    = $Apps -contains 'Brave.Brave'
+        # OpenCode is not a winget app: it applies when any Dev app is selected.
+        OpenCode = @($Apps | Where-Object { @($AppsData.Dev) -contains $_ }).Count -gt 0
+    }
+}
+
+function Read-MenuKey {
+    # Wrapper so tests can feed keys without a console.
+    [Console]::ReadKey($true)
+}
+
 function Show-Menu {
     param (
         [string]$Title,
         [string[]]$Options,
-        [switch]$Multi
+        [switch]$Multi,
+        [switch]$Preselected
     )
     $selected = 0
-    $checked = @($false) * $Options.Count
+    $checked = @($Preselected.IsPresent) * $Options.Count
+    $toggled = $false
     while ($true) {
         Clear-Host
         Write-Host $Title -ForegroundColor Cyan
-        Write-Host "Use ↑/↓, Space to mark, Enter to confirm, Esc to cancel" -ForegroundColor DarkGray
+        $help = if ($Multi) { "Use ↑/↓ to move, Space toggles, Enter confirms, Esc cancels" } else { "Use ↑/↓ to move, Enter confirms, Esc cancels" }
+        Write-Host $help -ForegroundColor DarkGray
         for ($i = 0; $i -lt $Options.Count; $i++) {
             $cursor = if ($i -eq $selected) { ">" } else { " " }
             $mark = if ($Multi -and $checked[$i]) { "[x]" } else { "[ ]" }
@@ -113,14 +142,18 @@ function Show-Menu {
                 Write-Host "$prefix $($Options[$i])"
             }
         }
-        $key = [Console]::ReadKey($true)
+        $key = Read-MenuKey
         switch ($key.Key) {
             'UpArrow'   { $selected = ($selected - 1 + $Options.Count) % $Options.Count }
             'DownArrow' { $selected = ($selected + 1) % $Options.Count }
-            'Spacebar'  { if ($Multi) { $checked[$selected] = -not $checked[$selected] } }
+            'Spacebar'  { if ($Multi) { $checked[$selected] = -not $checked[$selected]; $toggled = $true } }
             'Enter'     {
-                if ($Multi) { return ,@($Options | Where-Object { $checked[$Options.IndexOf($_)] }) }
-                return $selected
+                if (-not $Multi) { return $selected }
+                $picked = @(for ($i = 0; $i -lt $Options.Count; $i++) { if ($checked[$i]) { $Options[$i] } })
+                if ($picked.Count -gt 0) { return ,$picked }
+                # Nothing marked: Enter picks the highlighted item, unless the user unmarked everything on purpose.
+                if ($toggled) { return $null }
+                return ,@($Options[$selected])
             }
             'Escape'    { return $null }
         }
@@ -175,52 +208,63 @@ function Invoke-Menu {
     param (
         [string]$Title,
         [string[]]$Options,
-        [switch]$Multi
+        [switch]$Multi,
+        [switch]$Preselected
     )
     if ($menuFallback) { Show-NumberedMenu -Title $Title -Options $Options -Multi:$Multi }
-    else { Show-Menu -Title $Title -Options $Options -Multi:$Multi }
+    else { Show-Menu -Title $Title -Options $Options -Multi:$Multi -Preselected:$Preselected }
 }
 
 $interactive = ($PSBoundParameters.Count -eq 0) -and [Environment]::UserInteractive -and (-not $WhatIfPreference)
 
 if ($interactive) {
-    $scope = Invoke-Menu -Title "What do you want to install?" -Options @('All', 'Base', 'Dev', 'Gaming', 'Custom per-app')
+    $scope = Invoke-Menu -Title "What do you want to install?" -Options @('All', 'Base', 'Dev', 'Gaming')
     if ($null -eq $scope) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
-    if ($scope -eq 4) {
-        $Category = 'All'
-        $appsUrl = "https://raw.githubusercontent.com/$Repo/$Branch/config/apps.json"
-        try {
-            $appsData = Invoke-RestMethod -Uri $appsUrl
-        } catch {
-            Write-Error "Could not download the app list from: $appsUrl. $_"
-            $global:LASTEXITCODE = 1; if ($isIex) { return } else { exit 1 }
-        }
-        $flat = @($appsData.Base) + @($appsData.Dev) + @($appsData.Gaming)
-        $Apps = Invoke-Menu -Title "Mark apps with Space, Enter to confirm" -Options $flat -Multi
-        if ($null -eq $Apps -or $Apps.Count -eq 0) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
-    } else {
-        $Category = @('All', 'Base', 'Dev', 'Gaming')[$scope]
+    $Category = @('All', 'Base', 'Dev', 'Gaming')[$scope]
+    $appsUrl = "https://raw.githubusercontent.com/$Repo/$Branch/config/apps.json"
+    try {
+        $appsData = Invoke-RestMethod -Uri $appsUrl
+    } catch {
+        Write-Error "Could not download the app list from: $appsUrl. $_"
+        $global:LASTEXITCODE = 1; if ($isIex) { return } else { exit 1 }
     }
-    $gitChoice = Invoke-Menu -Title "Git configuration?" -Options @('Enter name/email', 'Skip Git configuration')
-    if ($null -eq $gitChoice) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
-    if ($gitChoice -eq 0) {
-        $GitUserName = Read-Host "Enter your user name for Git"
-        $GitUserEmail = Read-Host "Enter your email address for Git"
+    $categoryApps = if ($Category -eq 'All') { @($appsData.Base) + @($appsData.Dev) + @($appsData.Gaming) } else { @($appsData.$Category) }
+    $picked = Invoke-Menu -Title "Apps to install ($Category). Unmark the ones you do not want:" -Options $categoryApps -Multi -Preselected
+    if ($null -eq $picked -or $picked.Count -eq 0) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
+    # The whole category needs no -Apps filter.
+    if ($picked.Count -lt $categoryApps.Count) { $Apps = @($picked) }
+
+    # Only ask about what the selection will install.
+    $configScope = Get-ConfigScope -Category $Category -Apps $Apps -AppsData $appsData
+    if ($configScope.Git) {
+        $gitChoice = Invoke-Menu -Title "Git configuration?" -Options @('Enter name/email', 'Skip Git configuration')
+        if ($null -eq $gitChoice) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
+        if ($gitChoice -eq 0) {
+            $GitUserName = Read-Host "Enter your user name for Git"
+            $GitUserEmail = Read-Host "Enter your email address for Git"
+        } else {
+            $SkipGit = $true
+        }
     } else {
         $SkipGit = $true
     }
-    $codeChoice = Invoke-Menu -Title "VSCode configuration?" -Options @('Install extensions', 'Skip VSCode configuration')
-    if ($null -eq $codeChoice) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
-    if ($codeChoice -eq 1) {
+    if ($configScope.VSCode) {
+        $codeChoice = Invoke-Menu -Title "VSCode configuration?" -Options @('Install extensions', 'Skip VSCode configuration')
+        if ($null -eq $codeChoice) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
+        if ($codeChoice -eq 1) { $SkipVSCode = $true }
+    } else {
         $SkipVSCode = $true
     }
-    $openCodeChoice = Invoke-Menu -Title "OpenCode configuration?" -Options @('Install and configure OpenCode', 'Skip OpenCode configuration')
-    if ($null -eq $openCodeChoice) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
-    if ($openCodeChoice -eq 1) {
+    if ($configScope.OpenCode) {
+        $openCodeChoice = Invoke-Menu -Title "OpenCode configuration?" -Options @('Install and configure OpenCode', 'Skip OpenCode configuration')
+        if ($null -eq $openCodeChoice) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
+        if ($openCodeChoice -eq 1) { $SkipOpenCode = $true }
+    } else {
         $SkipOpenCode = $true
     }
-    # Brave extensions apply automatically on Base/All without asking.
-    $braveApplies = (($Category -eq 'Base') -or ($Category -eq 'All')) -and (-not $SkipBrave)
+    # Brave extensions apply without asking whenever Brave is part of the selection.
+    if (-not $configScope.Brave) { $SkipBrave = $true }
+    $braveApplies = -not $SkipBrave
     $confirm = Invoke-Menu -Title "Ready: Category=$Category Apps=$(if ($Apps.Count) { $Apps.Count } else { 'all' }) Git=$(if ($SkipGit) { 'skipped' } else { $GitUserName }) VSCode=$(if ($SkipVSCode) { 'skipped' } else { 'extensions' }) OpenCode=$(if ($SkipOpenCode) { 'skipped' } else { 'install' }) Brave=$(if ($braveApplies) { 'forced extensions (machine policy, not removable from Brave)' } else { 'skipped' })" -Options @('Install now', 'Simulate first (-WhatIf)', 'Cancel')
     if ($null -eq $confirm -or $confirm -eq 2) { Write-Host "Cancelled." -ForegroundColor Yellow; $global:LASTEXITCODE = 0; if ($isIex) { return } else { exit 0 } }
     if ($confirm -eq 1) {
@@ -334,6 +378,8 @@ if ($Apps.Count -gt 0) {
     $extractedApps = Get-ChildItem -Path $extractDir -Recurse -Filter "apps.json" -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -ne $extractedApps) {
         $cfg = Get-Content -Path $extractedApps.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+        # Config blocks follow the selected apps (same rule as the menu); read before filtering.
+        $configScope = Get-ConfigScope -Category $Category -Apps $Apps -AppsData $cfg
         $kept = 0
         foreach ($prop in @('Base', 'Dev', 'Gaming')) {
             $cfg.$prop = @($cfg.$prop | Where-Object { $Apps -contains $_ })
@@ -342,6 +388,10 @@ if ($Apps.Count -gt 0) {
         if ($kept -eq 0) {
             Write-Warning "None of the selected apps exist in apps.json ($($Apps -join ', ')). Keeping the full list."
         } else {
+            if (-not $configScope.Git) { $SkipGit = $true }
+            if (-not $configScope.VSCode) { $SkipVSCode = $true }
+            if (-not $configScope.OpenCode) { $SkipOpenCode = $true }
+            if (-not $configScope.Brave) { $SkipBrave = $true }
             $cfg | ConvertTo-Json -Depth 3 | Set-Content -Path $extractedApps.FullName -Encoding UTF8
             Write-Host "Custom selection: $kept apps." -ForegroundColor Cyan
         }

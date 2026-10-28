@@ -38,7 +38,7 @@ Salidas: `0` ok, `1` falta admin/OS/winget/módulo, SHA256 distinto o cualquier 
 ## Estructura
 
 - `install.ps1`: entry local. Guards admin/OS/winget, `Join-Path` rutas, `Update-SessionPath`, orquesta categorías + Git/VSCode/OpenCode solo si Dev/All + Brave solo si Base/All.
-- `bootstrap.ps1`: entry online. ZIP de `archive/$Branch.zip` (rama o tag) a `%TEMP%\win11-setup-*`, 2 intentos descarga, `-Sha256` opcional antes de extraer, `Show-Menu` flechas + `Show-NumberedMenu` fallback, `-Apps` filtra `apps.json`, `Save-RunLogs` antes de limpiar, `-KeepDownload` conserva. Elevación con `-EncodedCommand` (`Get-ElevatedCommand`): nunca `-Verb` + `-Redirect*` ni script en `%TEMP%`. `install.ps1` se invoca con `& pwsh @installArgs` (`Start-Process` no entrecomilla valores con espacios). Menú pregunta OpenCode (Brave automático en Base/All, avisado como política de equipo).
+- `bootstrap.ps1`: entry online. ZIP de `archive/$Branch.zip` (rama o tag) a `%TEMP%\win11-setup-*`, 2 intentos descarga, `-Sha256` opcional antes de extraer, `Show-Menu` flechas + `Show-NumberedMenu` fallback, `-Apps` filtra `apps.json`, `Save-RunLogs` antes de limpiar, `-KeepDownload` conserva. Elevación con `-EncodedCommand` (`Get-ElevatedCommand`): nunca `-Verb` + `-Redirect*` ni script en `%TEMP%`. `install.ps1` se invoca con `& pwsh @installArgs` (`Start-Process` no entrecomilla valores con espacios). Menú (spec 004): categoría → apps de la categoría preseleccionadas (`Show-Menu -Preselected`, teclas vía `Read-MenuKey`) → preguntas solo si aplican según `Get-ConfigScope` (Git ⇐ `Git.Git`, VSCode ⇐ `Microsoft.VisualStudioCode`, OpenCode ⇐ alguna app Dev, Brave ⇐ `Brave.Brave`, avisado como política de equipo). Con `-Apps` sin menú, la misma regla fija los `-Skip*`. Sin "Custom per-app".
 - `config/apps.json`: `{Base[], Dev[], Gaming[]}` con IDs winget exactos. Datos, no lógica.
 - `config/vscode/extensions.json`: `{extensions[]}`. `config/brave/extensions.json`: `{extensions[{id, name}]}`. `config/opencode/`: snapshot config global sin secretos.
 - `config/git/`: reservado, sin tokens.
@@ -48,8 +48,8 @@ Salidas: `0` ok, `1` falta admin/OS/winget/módulo, SHA256 distinto o cualquier 
 - `modules/Config-VSCode.ps1`: instala ausentes con `code --install-extension --force`.
 - `modules/Config-OpenCode.ps1`: instalador oficial (2 intentos) + fusión conserva-con-aviso, omite secretos (nombre o asignación `clave: valor`, no la palabra suelta).
 - `modules/Config-Brave.ps1`: asegura Brave vía winget + extensiones idempotentes con aviso de reinicio.
-- `tests/Runner-Mock.ps1`: suite sin dependencias (208 checks, todo mockeado). `tests/*.Tests.ps1`: Pester 5+ (74 tests).
-- `docs/constitution.md`: ley del proyecto (P2 con excepción RF-17). `specs/001-instalador-win11/{spec,plan,tasks}.md` + `specs/002-opencode-brave-v2/{spec,plan,tasks}.md` + `specs/003-auditoria-hardening/{spec,plan,tasks}.md`: contratos SDD. `docs/estructura-proyecto.md`: mapa carpetas.
+- `tests/Runner-Mock.ps1`: suite sin dependencias (238 checks, todo mockeado). `tests/*.Tests.ps1`: Pester 5+ (79 tests).
+- `docs/constitution.md`: ley del proyecto (P2 con excepción RF-17). `specs/001-instalador-win11/{spec,plan,tasks}.md` + `specs/002-opencode-brave-v2/{spec,plan,tasks}.md` + `specs/003-auditoria-hardening/{spec,plan,tasks}.md` + `specs/004-menu-seleccion-apps/{spec,plan,tasks}.md`: contratos SDD. `docs/estructura-proyecto.md`: mapa carpetas.
 
 ## Convenciones para IA
 

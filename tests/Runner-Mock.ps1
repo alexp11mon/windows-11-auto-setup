@@ -499,6 +499,97 @@ $iexExit = $LASTEXITCODE
 Test-Assert ($iexOut -notmatch 'Invoke-Expression:') "bootstrap bajo iex arranca sin errores del bloque param (salida: $($iexOut.Trim()))"
 Test-Assert ($iexExit -eq 0) "bootstrap bajo iex cancelado sale con 0 (real=$iexExit)"
 
+# --- Spec 004: menu con seleccion por categoria ---
+foreach ($fn in @('Show-Menu', 'Get-ConfigScope')) {
+    $fnAst = $bootAstMenu = [System.Management.Automation.Language.Parser]::ParseFile($bootPath, [ref]$null, [ref]$null).Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $fn }, $true)
+    if ($fnAst) { . ([scriptblock]::Create($fnAst.Extent.Text)) }
+    Test-Assert ($null -ne $fnAst) "bootstrap define $fn"
+}
+function Clear-Host { }
+function Invoke-MenuWithKeys {
+    param([string[]]$Keys, [string[]]$Options, [switch]$Multi, [switch]$Preselected)
+    $global:MenuKeys = [System.Collections.Generic.Queue[string]]::new([string[]]$Keys)
+    function global:Read-MenuKey { [pscustomobject]@{ Key = $global:MenuKeys.Dequeue() } }
+    Show-Menu -Title 'T' -Options $Options -Multi:$Multi -Preselected:$Preselected 6>$null
+}
+$m1 = Invoke-MenuWithKeys -Keys @('DownArrow', 'Enter') -Options @('A', 'B', 'C') -Multi
+Test-Assert ((@($m1) -join ',') -eq 'B') "Multi: Enter sin marcas elige la resaltada (RF-43, real=$(@($m1) -join ','))"
+$m2 = Invoke-MenuWithKeys -Keys @('Spacebar', 'DownArrow', 'DownArrow', 'Spacebar', 'Enter') -Options @('A', 'B', 'C') -Multi
+Test-Assert ((@($m2) -join ',') -eq 'A,C') "Multi: Espacio marca y Enter devuelve solo las marcadas (real=$(@($m2) -join ','))"
+$m3 = Invoke-MenuWithKeys -Keys @('Escape') -Options @('A', 'B') -Multi
+Test-Assert ($null -eq $m3) 'Multi: Esc cancela'
+$m4 = Invoke-MenuWithKeys -Keys @('Enter') -Options @('A', 'B', 'C') -Multi -Preselected
+Test-Assert (($m4.Count -eq 3) -and ((@($m4) -join ',') -eq 'A,B,C')) "Preseleccionado: Enter confirma todas (RF-44, real=$(@($m4) -join ','))"
+$m5 = Invoke-MenuWithKeys -Keys @('DownArrow', 'Spacebar', 'Enter') -Options @('A', 'B', 'C') -Multi -Preselected
+Test-Assert ((@($m5) -join ',') -eq 'A,C') "Preseleccionado: Espacio desmarca (real=$(@($m5) -join ','))"
+$m6 = Invoke-MenuWithKeys -Keys @('Spacebar', 'DownArrow', 'Spacebar', 'Enter') -Options @('A', 'B') -Multi -Preselected
+Test-Assert ($null -eq $m6) 'Preseleccionado: desmarcar todo y Enter cancela (RF-46)'
+$m7 = Invoke-MenuWithKeys -Keys @('DownArrow', 'DownArrow', 'Enter') -Options @('A', 'B', 'C')
+Test-Assert ($m7 -eq 2) 'Menu simple: Enter devuelve el indice resaltado'
+Remove-Item function:\Read-MenuKey, function:\Clear-Host, function:\Show-Menu -ErrorAction SilentlyContinue
+
+$appsForScope = Get-Content $AppsConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$scopeKey = { param($s) "Git=$($s.Git) VSCode=$($s.VSCode) OpenCode=$($s.OpenCode) Brave=$($s.Brave)" }
+$expectedNoSel = @{
+    All    = 'Git=True VSCode=True OpenCode=True Brave=True'
+    Base   = 'Git=False VSCode=False OpenCode=False Brave=True'
+    Dev    = 'Git=True VSCode=True OpenCode=True Brave=False'
+    Gaming = 'Git=False VSCode=False OpenCode=False Brave=False'
+}
+foreach ($cat in $expectedNoSel.Keys) {
+    $got = & $scopeKey (Get-ConfigScope -Category $cat -AppsData $appsForScope)
+    Test-Assert ($got -eq $expectedNoSel[$cat]) "Get-ConfigScope sin seleccion = gating de install.ps1 para $cat (real=$got)"
+}
+$scopeCases = @(
+    @{ Apps = @('Valve.Steam'); Expected = 'Git=False VSCode=False OpenCode=False Brave=False' }
+    @{ Apps = @('Git.Git'); Expected = 'Git=True VSCode=False OpenCode=True Brave=False' }
+    @{ Apps = @('Microsoft.VisualStudioCode'); Expected = 'Git=False VSCode=True OpenCode=True Brave=False' }
+    @{ Apps = @('Brave.Brave'); Expected = 'Git=False VSCode=False OpenCode=False Brave=True' }
+    @{ Apps = @('Warp.Warp'); Expected = 'Git=False VSCode=False OpenCode=True Brave=False' }
+)
+foreach ($case in $scopeCases) {
+    $got = & $scopeKey (Get-ConfigScope -Category 'All' -Apps $case.Apps -AppsData $appsForScope)
+    Test-Assert ($got -eq $case.Expected) "Get-ConfigScope con $($case.Apps -join ',') (RF-47/RF-48, real=$got)"
+}
+Remove-Item function:\Get-ConfigScope -ErrorAction SilentlyContinue
+
+# Flujo real del menu bajo iex en un proceso hijo: menu numerado (stdin redirigido),
+# Read-Host con respuestas fijas y apps.json local en vez de red. "Simulate first" sale sin tocar nada.
+function Invoke-BootstrapMenu {
+    param([string[]]$Answers)
+    $answerList = ($Answers | ForEach-Object { "'$_'" }) -join ','
+    $childCmd = @"
+`$global:MenuAnswers = [System.Collections.Generic.Queue[string]]::new([string[]]@($answerList))
+function Read-Host { param(`$Prompt) if (`$global:MenuAnswers.Count) { `$global:MenuAnswers.Dequeue() } else { '' } }
+function Invoke-RestMethod { param(`$Uri) Get-Content -Raw '$AppsConfigPath' -Encoding UTF8 | ConvertFrom-Json }
+Get-Content -Raw '$bootPath' | Invoke-Expression
+"@
+    $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childCmd))
+    '' | & pwsh -NoProfile -EncodedCommand $enc *>&1 | Out-String
+}
+$flowGaming = Invoke-BootstrapMenu -Answers @('4', '1,2,4', '2')
+Test-Assert ($flowGaming -notmatch 'Custom per-app') 'Menu de alcance sin "Custom per-app" (RF-45)'
+Test-Assert ($flowGaming -match 'Apps to install \(Gaming\)') 'Gaming muestra su lista de apps (RF-44)'
+Test-Assert ($flowGaming -notmatch 'Git configuration\?|VSCode configuration\?|OpenCode configuration\?') 'Gaming no pregunta por Git/VSCode/OpenCode (RF-47/RF-48)'
+Test-Assert ($flowGaming -match 'Category=Gaming Apps=3 Git=skipped VSCode=skipped OpenCode=skipped Brave=skipped') "Gaming con 3 de 4 apps: -Apps y todo omitido (RF-44/RF-47)"
+$flowDev = Invoke-BootstrapMenu -Answers @('3', '1,2,3,4,5,6', '2', '1', '2', '2')
+Test-Assert (($flowDev -match 'Git configuration\?') -and ($flowDev -match 'VSCode configuration\?') -and ($flowDev -match 'OpenCode configuration\?')) 'Dev completo pregunta Git, VSCode y OpenCode'
+Test-Assert ($flowDev -match 'Category=Dev Apps=all Git=skipped VSCode=extensions OpenCode=skipped Brave=skipped') 'Dev completo sin -Apps y respuestas aplicadas'
+$flowDevGit = Invoke-BootstrapMenu -Answers @('3', '2', '2', '2', '2')
+Test-Assert (($flowDevGit -match 'Git configuration\?') -and ($flowDevGit -match 'OpenCode configuration\?') -and ($flowDevGit -notmatch 'VSCode configuration\?')) 'Dev solo Git: pregunta Git y OpenCode, no VSCode (RF-47/RF-48)'
+$flowBase = Invoke-BootstrapMenu -Answers @('2', '2,3', '2')
+Test-Assert ($flowBase -match 'Category=Base Apps=2 .*Brave=skipped') 'Base sin Brave.Brave no aplica extensiones de Brave (RF-47)'
+$flowBaseBrave = Invoke-BootstrapMenu -Answers @('2', '1,2', '2')
+Test-Assert ($flowBaseBrave -match 'Brave=forced extensions') 'Base con Brave.Brave aplica extensiones de Brave (RF-47)'
+$flowEmpty = Invoke-BootstrapMenu -Answers @('4', '')
+Test-Assert ($flowEmpty -match 'Cancelled') 'Lista vacia en menu numerado cancela (RF-46)'
+Remove-Item function:\Invoke-BootstrapMenu -ErrorAction SilentlyContinue
+
+# -Apps sin menu: los -Skip* se derivan de la seleccion tras extraer (RF-47/RF-48)
+$appsBlock = $boot.Substring($boot.IndexOf('if ($Apps.Count -gt 0) {'))
+Test-Assert ($appsBlock -match 'Get-ConfigScope -Category \$Category -Apps \$Apps -AppsData \$cfg') 'Ruta -Apps calcula Get-ConfigScope con el apps.json extraido'
+Test-Assert ($appsBlock.IndexOf('$SkipGit = $true') -gt $appsBlock.IndexOf('} else {') -and $appsBlock.IndexOf('$SkipGit = $true') -lt $appsBlock.IndexOf('$installArgs')) 'Ruta -Apps aplica los -Skip* solo si hay IDs validos y antes de construir installArgs'
+
 # -Apps "a,b" desde pwsh -File se separa en IDs (simulacion real, sin red)
 $appsWhatIf = (& pwsh -NoProfile -File $bootPath -Category Base -Apps 'Valve.Steam,Brave.Brave' -WhatIf) -join "`n"
 Test-Assert ($appsWhatIf -match 'Would keep only these apps: Valve\.Steam, Brave\.Brave') "bootstrap -WhatIf separa -Apps con comas (RF-29)"
