@@ -63,4 +63,4 @@ T28 → T19 → T20 → T21 → T22 → T23 → T24 → T25 → T26 → T27 → 
 
 ## Dudas abiertas
 
-- Las de la spec: esquema de tags de release (T23, T34) y origen del script elevado bajo `iex` (T21).
+- Sin bloqueantes. Aprobado el 2026-10-28 (spec, plan y tasks). Resueltas: tags `vMAJOR.MINOR.PATCH` con SHA256 en las notas de release (T23, T34) y script elevado bajo `iex` descargado de la URL raw (T21). La implementación aún no ha empezado.

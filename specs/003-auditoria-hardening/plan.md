@@ -80,4 +80,4 @@ Sin módulos nuevos. Se corrigen `bootstrap.ps1`, `install.ps1`, `modules/Common
 
 ## Dudas abiertas
 
-- Las dos de la spec (tags de release; origen del script elevado bajo `iex`).
+- Sin bloqueantes. Plan aprobado el 2026-10-28; las dos dudas de la spec quedaron resueltas (tags `vMAJOR.MINOR.PATCH` con SHA256 en las notas de release; script elevado bajo `iex` descargado de la URL raw del mismo `$Branch`).

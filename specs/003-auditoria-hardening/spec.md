@@ -68,6 +68,9 @@ Una auditoría del repo (2026-10-28) encontró 15 hallazgos en el instalador v2:
 
 ## Dudas abiertas
 
-- [NECESITA ACLARACIÓN] RF-32: ¿qué esquema de tags de release usar (p. ej. `v1.0.0`) y quién publica el SHA256? Hasta decidirlo, el `-Branch` por defecto sigue siendo `master`.
-- [NECESITA ACLARACIÓN] RF-30: bajo `iex` el hijo elevado descargará el mismo `bootstrap.ps1` desde `raw.githubusercontent.com/$Repo/$Branch` (misma confianza que el ZIP). ¿Se acepta, o se prefiere exigir descarga previa a fichero con `.\bootstrap.ps1`?
+Aprobada la spec por el usuario el 2026-10-28, con estas dudas resueltas:
+
+- RF-32 resuelto: tags con formato `vMAJOR.MINOR.PATCH`; el mantenedor publica el SHA256 del ZIP en las notas de cada release. `-Sha256` es opcional y el `-Branch` por defecto sigue siendo `master` (cambiarlo exige un tag existente; queda fuera de esta spec). El primer tag `v1.0.0` se crea tras T35.
+- RF-30 resuelto: bajo `iex` el hijo elevado descarga el mismo `bootstrap.ps1` desde `raw.githubusercontent.com/$Repo/$Branch` (misma confianza que el ZIP). No se exige descarga previa a fichero.
 - Hallazgo 8 retirado como bug: RF-35 solo añade un test de no regresión.
+- Sin dudas bloqueantes.
