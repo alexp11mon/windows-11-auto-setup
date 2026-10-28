@@ -18,6 +18,17 @@ Describe 'Common.ps1' {
             $p1 | Should -Match 'install-\d{8}-\d{6}\.log$'
         }
     }
+    Context 'Write-InstallLog' {
+        It 'Escribe el log tambien en -WhatIf' {
+            $log = Join-Path $TestDrive 'whatif.log'
+            Mock Initialize-InstallLog { $log }
+            & {
+                $WhatIfPreference = $true
+                Write-InstallLog -Message 'linea-whatif' -Level 'INFO'
+            }
+            Get-Content $log -Raw | Should -Match 'linea-whatif'
+        }
+    }
     Context 'Test-AppInstalled' {
         BeforeEach { Mock winget { } }
         It 'Devuelve true si winget list contiene el Id exacto' {

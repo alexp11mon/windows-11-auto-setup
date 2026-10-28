@@ -92,6 +92,15 @@ Write-InstallLog -Message 'linea-test-2' -Level 'WARNING' 3>$null
 $logContent = Get-Content $tempLog -Raw -ErrorAction SilentlyContinue
 Test-Assert ($logContent -match 'linea-test-1' -and $logContent -match 'linea-test-2') 'Write-InstallLog escribe 2 lineas al mismo archivo'
 Remove-Item $tempLog -Force -ErrorAction SilentlyContinue
+
+# En -WhatIf el log se escribe igual (plan 001: en simulacion solo loguea); si se escribe, no hay aviso "What if"
+& {
+    $WhatIfPreference = $true
+    Write-InstallLog -Message 'linea-whatif' -Level 'INFO'
+}
+$whatIfLog = Get-Content $tempLog -Raw -ErrorAction SilentlyContinue
+Test-Assert ($whatIfLog -match 'linea-whatif') 'Write-InstallLog escribe el log tambien en -WhatIf'
+Remove-Item $tempLog -Force -ErrorAction SilentlyContinue
 # Restaurar funcion original re-importando
 . (Join-Path $ModulesDir 'Common.ps1')
 . (Join-Path $ModulesDir 'Install-Category.ps1')

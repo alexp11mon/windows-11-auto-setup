@@ -53,7 +53,7 @@ Línea base antes de empezar (2026-10-28): Runner 158/159 y Pester 54/59. Todos 
   Verificado: 2026-10-28, confirmación del menú, log de `Config-Brave` y README (con cómo quitarlas) mencionan la política de equipo.
 - [x] T34 Actualizar docs
   Hecho cuando: README (uso de `-Sha256`, tags, ruta de logs, política Brave), AGENTS.md y `docs/estructura-proyecto.md` actualizados en español y el recuento de tests correcto. Cubre: RF-32, RF-42 | Módulo: docs
-  Verificado: 2026-10-28, diff revisado; recuentos 205 checks / 72 tests.
+  Verificado: 2026-10-28, diff revisado; recuentos 206 checks / 73 tests.
 - [x] T35 Validar RF-28 a RF-42 y demo real
   Hecho cuando: Runner + Pester en verde, `-WhatIf` de `install` y `bootstrap` con salida 0, log sin ERROR imprevisto, y demo manual de elevación desde terminal normal con el one-liner. Cubre: todos | Módulo: validación
   Verificado: 2026-10-28, Runner 204/205 (el único fallo es "winget disponible en esta sesion", de entorno y previo) + Pester 72/72; `bootstrap -WhatIf` sale con 0 (también con `-Apps`/`-Sha256`/nombre con espacio); `-Sha256 abc` rechazado. Pendiente del usuario, en sesión real: `install -WhatIf` como admin (aquí aborta sin admin, como está diseñado) y demo del one-liner desde una terminal sin elevar (UAC no se puede automatizar). Hasta entonces, el one-liner de `master` solo usará este código cuando se haga push.
@@ -61,6 +61,7 @@ Línea base antes de empezar (2026-10-28): Runner 158/159 y Pester 54/59. Todos 
 ## Hallazgo adicional durante la implementación
 
 - `Start-Process -ArgumentList` no entrecomilla los valores: `-GitUserName "Ana Lopez"` llegaba como `GitUserName=Ana` y `GitUserEmail=Lopez` (reproducido). Afectaba a la elevación y a la llamada a `install.ps1`. Se corrige dentro de T19/T20: la elevación usa `-EncodedCommand` con literales entrecomillados, e `install.ps1` se invoca con `& pwsh @installArgs`. Cubierto por el test de ida y vuelta con `"Ana O'Brien"`.
+- En `-WhatIf` no se escribía ningún log: `Add-Content` (y el `New-Item` de `logs/`) en `Write-InstallLog` también obedecen `$WhatIfPreference`, así que cada mensaje imprimía "What if: Agregar contenido..." y `logs/` quedaba vacío. Contradecía el plan 001 ("si `-WhatIf` solo loguea simulación"), y la comprobación "log sin ERROR" de T18 no tenía log que revisar. Detectado en la demo de T35 y corregido con `-WhatIf:$false` en ambas llamadas (el log no es un cambio en el sistema, P5). Test en Runner (Bloque 2) y Pester (`Common.Tests.ps1`): falla antes del arreglo y pasa después. Suites: Runner 206/206 y Pester 73/73 con el PATH de usuario corregido.
 
 ## Trazabilidad RF -> Tareas
 

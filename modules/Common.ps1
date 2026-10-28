@@ -17,7 +17,7 @@ function Initialize-InstallLog {
     $repoRoot = Split-Path -Parent $PSScriptRoot
     $logsDir = Join-Path -Path $repoRoot -ChildPath "logs"
     if (-not (Test-Path $logsDir)) {
-        New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
+        New-Item -ItemType Directory -Path $logsDir -Force -WhatIf:$false | Out-Null
     }
 
     $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
@@ -39,7 +39,8 @@ function Write-InstallLog {
     $date = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $logLine = "[$date] [$Level] $Message"
 
-    Add-Content -Path $logPath -Value $logLine -Encoding UTF8
+    # The log is not a system change: write it in -WhatIf too.
+    Add-Content -Path $logPath -Value $logLine -Encoding UTF8 -WhatIf:$false
 
     # Mirror errors/warnings to the console and flag the run as failed on ERROR.
     if ($Level -eq "ERROR") {

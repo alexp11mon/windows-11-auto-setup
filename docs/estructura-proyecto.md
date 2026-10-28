@@ -79,7 +79,7 @@ Funciones PowerShell:
 - `Config-Brave.ps1`: `Invoke-BraveConfig -ExtensionsConfigPath [-PolicyRoot]`; asegura Brave vía winget y aplica las extensiones como política de equipo de forma idempotente (una sola lectura de la política) con aviso de reinicio.
 
 ### `tests/`
-Suite mockeada sin dependencias (`Runner-Mock.ps1`, 205 checks: sintaxis, JSON, winget/Git/VSCode/OpenCode/Brave con mocks, guards del entry, bootstrap, menú, comando de elevación real con hijo falso y AST de `Start-Process`) + tests Pester 5+ por módulo (`Common`, `Install-Category`, `Config-Git`, `Config-VSCode`, `Config-OpenCode`, `Config-Brave`, `Install.Entry`, `Bootstrap.Entry`; 72 tests). No instalan nada: el registro solo se toca en clave HKCU temporal con limpieza. Requieren Pester 5+ solo para los `*.Tests.ps1`.
+Suite mockeada sin dependencias (`Runner-Mock.ps1`, 206 checks: sintaxis, JSON, winget/Git/VSCode/OpenCode/Brave con mocks, guards del entry, bootstrap, menú, comando de elevación real con hijo falso y AST de `Start-Process`) + tests Pester 5+ por módulo (`Common`, `Install-Category`, `Config-Git`, `Config-VSCode`, `Config-OpenCode`, `Config-Brave`, `Install.Entry`, `Bootstrap.Entry`; 73 tests). No instalan nada: el registro solo se toca en clave HKCU temporal con limpieza. Requieren Pester 5+ solo para los `*.Tests.ps1`.
 
 ### `logs/`
 Un `.log` fechado por ejecución (`install-YYYYMMDD-HHmmss.log`). Qué fue instalado y qué falló. En línea, `bootstrap.ps1` lo copia a `%LOCALAPPDATA%\win11-setup\logs` antes de borrar el temporal. Los `*.log` están ignorados por git; la carpeta se conserva con `.gitkeep`.
