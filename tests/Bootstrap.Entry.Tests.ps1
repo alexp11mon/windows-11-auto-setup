@@ -68,6 +68,11 @@ Describe 'bootstrap.ps1 online installer' {
         $script:Boot | Should -Not -Match 'RedirectStandard'
         $script:Boot | Should -Match 'Elevated installer exited with code'
     }
+    It 'Starts under iex without param-block errors (real one-liner path)' {
+        $out = & pwsh -NoProfile -NonInteractive -Command "Get-Content -Raw '$($script:BootPath)' | Invoke-Expression" 2>&1 | Out-String
+        $out | Should -Not -Match 'Invoke-Expression:'
+        $out | Should -Match 'Cancelled'
+    }
     It 'Never writes its own code to TEMP under iex (RF-30)' {
         $script:Boot | Should -Not -Match 'bootstrap-iex\.ps1'
         $script:Boot | Should -Not -Match 'MyCommand\.ScriptBlock'
@@ -108,6 +113,7 @@ exit 7
         ('a' * 64) | Should -Match $pattern
         ('A' * 64) | Should -Match $pattern
         ('a' * 63) | Should -Not -Match $pattern
+        '' | Should -Match $pattern  # under iex the empty default is validated too
         $script:Boot.IndexOf('Get-FileHash -Path $zipPath') | Should -BeLessThan $script:Boot.IndexOf('Expand-Archive')
         $script:Boot | Should -Match 'SHA256 mismatch'
     }

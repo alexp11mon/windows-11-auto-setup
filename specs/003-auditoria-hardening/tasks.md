@@ -53,7 +53,7 @@ Línea base antes de empezar (2026-10-28): Runner 158/159 y Pester 54/59. Todos 
   Verificado: 2026-10-28, confirmación del menú, log de `Config-Brave` y README (con cómo quitarlas) mencionan la política de equipo.
 - [x] T34 Actualizar docs
   Hecho cuando: README (uso de `-Sha256`, tags, ruta de logs, política Brave), AGENTS.md y `docs/estructura-proyecto.md` actualizados en español y el recuento de tests correcto. Cubre: RF-32, RF-42 | Módulo: docs
-  Verificado: 2026-10-28, diff revisado; recuentos 206 checks / 73 tests.
+  Verificado: 2026-10-28, diff revisado; recuentos 208 checks / 74 tests.
 - [x] T35 Validar RF-28 a RF-42 y demo real
   Hecho cuando: Runner + Pester en verde, `-WhatIf` de `install` y `bootstrap` con salida 0, log sin ERROR imprevisto, y demo manual de elevación desde terminal normal con el one-liner. Cubre: todos | Módulo: validación
   Verificado: 2026-10-28, Runner 204/205 (el único fallo es "winget disponible en esta sesion", de entorno y previo) + Pester 72/72; `bootstrap -WhatIf` sale con 0 (también con `-Apps`/`-Sha256`/nombre con espacio); `-Sha256 abc` rechazado. Pendiente del usuario, en sesión real: `install -WhatIf` como admin (aquí aborta sin admin, como está diseñado) y demo del one-liner desde una terminal sin elevar (UAC no se puede automatizar). Hasta entonces, el one-liner de `master` solo usará este código cuando se haga push.
@@ -89,3 +89,4 @@ T28 → T19 → T20 → T21 → T22 → T23 → T24 → T25 → T26 → T27 → 
 
 - Sin bloqueantes. Aprobado el 2026-10-28 (spec, plan y tasks). Resueltas: tags `vMAJOR.MINOR.PATCH` con SHA256 en las notas de release (T23, T34) y script elevado bajo `iex` descargado de la URL raw (T21).
 - Pendiente fuera de esta spec: crear el tag `v1.0.0` y publicar su SHA256 tras la demo real de T35.
+- El one-liner (`irm ... | iex`) fallaba al arrancar con "No se puede agregar el atributo porque la variable Sha256 con valor ya no sería válida": bajo `iex` el bloque `param()` se evalúa como código y `ValidatePattern` se aplica al valor vacío por defecto. Lo detectó el usuario tras el push de T35. Corregido con el patrón `^([0-9a-fA-F]{64})?$`. Nuevo test en Runner y Pester que ejecuta `bootstrap.ps1` de verdad vía `Invoke-Expression` (sin consola, cancela con 0): falla antes del arreglo y pasa después. Suites: Runner 208/208 y Pester 74/74.

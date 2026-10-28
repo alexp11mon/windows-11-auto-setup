@@ -35,7 +35,8 @@ param (
     [switch]$SkipBrave,
 
     # Expected SHA256 of the downloaded ZIP (published in each release's notes).
-    [ValidatePattern('^[0-9a-fA-F]{64}$')]
+    # Empty must stay valid: under iex the param block runs as code with the empty default.
+    [ValidatePattern('^([0-9a-fA-F]{64})?$')]
     [string]$Sha256,
 
     # Custom per-app selection: install only these winget IDs.

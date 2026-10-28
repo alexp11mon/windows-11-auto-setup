@@ -163,10 +163,10 @@ Con `Base` o `All` (salvo `-SkipBrave` y sin pregunta en el menú):
 ## Tests (no instalan nada, todo mockeado)
 
 ```powershell
-# Suite principal sin dependencias (206 checks)
+# Suite principal sin dependencias (208 checks)
 pwsh -NoProfile -File tests/Runner-Mock.ps1
 
-# Tests Pester 5 (requiere Install-Module Pester -MinimumVersion 5.0, 73 tests)
+# Tests Pester 5 (requiere Install-Module Pester -MinimumVersion 5.0, 74 tests)
 Invoke-Pester -Path ./tests -Output Detailed
 ```
 

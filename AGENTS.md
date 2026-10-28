@@ -48,7 +48,7 @@ Salidas: `0` ok, `1` falta admin/OS/winget/módulo, SHA256 distinto o cualquier 
 - `modules/Config-VSCode.ps1`: instala ausentes con `code --install-extension --force`.
 - `modules/Config-OpenCode.ps1`: instalador oficial (2 intentos) + fusión conserva-con-aviso, omite secretos (nombre o asignación `clave: valor`, no la palabra suelta).
 - `modules/Config-Brave.ps1`: asegura Brave vía winget + extensiones idempotentes con aviso de reinicio.
-- `tests/Runner-Mock.ps1`: suite sin dependencias (206 checks, todo mockeado). `tests/*.Tests.ps1`: Pester 5+ (73 tests).
+- `tests/Runner-Mock.ps1`: suite sin dependencias (208 checks, todo mockeado). `tests/*.Tests.ps1`: Pester 5+ (74 tests).
 - `docs/constitution.md`: ley del proyecto (P2 con excepción RF-17). `specs/001-instalador-win11/{spec,plan,tasks}.md` + `specs/002-opencode-brave-v2/{spec,plan,tasks}.md` + `specs/003-auditoria-hardening/{spec,plan,tasks}.md`: contratos SDD. `docs/estructura-proyecto.md`: mapa carpetas.
 
 ## Convenciones para IA

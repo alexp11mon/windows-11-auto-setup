@@ -492,6 +492,13 @@ Test-Assert ($boot -match '\[switch\]\$SkipOpenCode' -and $boot -match '\[switch
 Test-Assert (($boot -match "\`$elevSwitches \+= 'SkipOpenCode'") -and ($boot -match "\`$installArgs \+= '-SkipBrave'")) 'bootstrap.ps1 propaga SkipOpenCode/SkipBrave al elevar y al instalar'
 Test-Assert ($boot -match 'machine policy') 'bootstrap.ps1 avisa que Brave se fuerza por politica (RF-42)'
 
+# Bajo iex (one-liner real, sin parametros): el param() se evalua como codigo y no debe fallar.
+# Sin consola, el menu numerado lee fin de entrada y cancela con 0, sin red ni cambios.
+$iexOut = (& pwsh -NoProfile -NonInteractive -Command "Get-Content -Raw '$bootPath' | Invoke-Expression; exit `$LASTEXITCODE" 2>&1 | Out-String)
+$iexExit = $LASTEXITCODE
+Test-Assert ($iexOut -notmatch 'Invoke-Expression:') "bootstrap bajo iex arranca sin errores del bloque param (salida: $($iexOut.Trim()))"
+Test-Assert ($iexExit -eq 0) "bootstrap bajo iex cancelado sale con 0 (real=$iexExit)"
+
 # -Apps "a,b" desde pwsh -File se separa en IDs (simulacion real, sin red)
 $appsWhatIf = (& pwsh -NoProfile -File $bootPath -Category Base -Apps 'Valve.Steam,Brave.Brave' -WhatIf) -join "`n"
 Test-Assert ($appsWhatIf -match 'Would keep only these apps: Valve\.Steam, Brave\.Brave') "bootstrap -WhatIf separa -Apps con comas (RF-29)"
@@ -501,7 +508,7 @@ Test-Assert ($LASTEXITCODE -eq 0) 'bootstrap -WhatIf con -Apps sale con 0'
 $bootCmd = Get-Command $bootPath
 $shaPattern = ($bootCmd.Parameters['Sha256'].Attributes | Where-Object { $_ -is [System.Management.Automation.ValidatePatternAttribute] }).RegexPattern
 $hexLower = 'a' * 64; $hexUpper = 'A' * 64
-Test-Assert (($hexLower -match $shaPattern) -and ($hexUpper -match $shaPattern) -and (('a' * 63) -notmatch $shaPattern)) 'bootstrap -Sha256 acepta 64 hex en mayus/minus y rechaza 63 (RF-32)'
+Test-Assert (($hexLower -match $shaPattern) -and ($hexUpper -match $shaPattern) -and (('a' * 63) -notmatch $shaPattern) -and ('' -match $shaPattern)) 'bootstrap -Sha256 acepta 64 hex en mayus/minus , rechaza 63 y admite vacio para iex (RF-32)'
 $hashPos = $boot.IndexOf('Get-FileHash -Path $zipPath')
 Test-Assert ($hashPos -gt 0 -and $hashPos -lt $boot.IndexOf('Expand-Archive')) 'bootstrap verifica SHA256 antes de extraer (RF-32)'
 Test-Assert ($boot -match 'SHA256 mismatch') 'bootstrap aborta con ERROR si el hash no coincide (RF-32)'
