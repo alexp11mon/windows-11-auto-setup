@@ -484,7 +484,7 @@ Test-Assert (([regex]::Matches($boot, 'if \(\$isIex\) \{ return \} else \{ exit'
 Test-Assert ($boot -match '\[switch\]\$SkipGit' -and $boot -match '\[switch\]\$SkipVSCode') 'bootstrap.ps1 acepta switches SkipGit/SkipVSCode'
 Test-Assert ($boot -match "Skip VSCode configuration") 'bootstrap.ps1 menu pregunta por VSCode'
 Test-Assert (($boot -match "\`$elevSwitches \+= 'SkipGit'") -and ($boot -match "\`$installArgs \+= '-SkipGit'")) 'bootstrap.ps1 propaga SkipGit al elevar y al instalar'
-Test-Assert ($boot -match 'Elevated installer exited with code') 'bootstrap.ps1 elevacion muestra exit code'
+Test-Assert ($boot -match 'Installer exited with code') 'bootstrap.ps1 muestra el exit code del instalador'
 Test-Assert ($boot -notmatch 'RedirectStandard') 'bootstrap.ps1 sin -Redirect* (incompatible con -Verb RunAs, RF-28)'
 Test-Assert ($boot -match '& pwsh @installArgs' -and $boot -notmatch 'Start-Process -FilePath "pwsh" -ArgumentList \$installArgs') 'bootstrap.ps1 invoca install.ps1 directo (valores con espacios intactos)'
 Test-Assert (($boot -match "\`$elevSwitches \+= 'SkipVSCode'") -and ($boot -match "\`$installArgs \+= '-SkipVSCode'")) 'bootstrap.ps1 propaga SkipVSCode al elevar y al instalar'
@@ -499,7 +499,8 @@ $iexExit = $LASTEXITCODE
 Test-Assert ($iexOut -notmatch 'Invoke-Expression:') "bootstrap bajo iex arranca sin errores del bloque param (salida: $($iexOut.Trim()))"
 Test-Assert ($iexExit -eq 0) "bootstrap bajo iex cancelado sale con 0 (real=$iexExit)"
 
-# --- Spec 004: menu con seleccion por categoria ---
+# --- Spec 004/005: menu con seleccion por categoria, Back y memoria ---
+$MenuBack = '<back>'
 foreach ($fn in @('Show-Menu', 'Get-ConfigScope')) {
     $fnAst = $bootAstMenu = [System.Management.Automation.Language.Parser]::ParseFile($bootPath, [ref]$null, [ref]$null).Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $fn }, $true)
     if ($fnAst) { . ([scriptblock]::Create($fnAst.Extent.Text)) }
@@ -507,25 +508,31 @@ foreach ($fn in @('Show-Menu', 'Get-ConfigScope')) {
 }
 function Clear-Host { }
 function Invoke-MenuWithKeys {
-    param([string[]]$Keys, [string[]]$Options, [switch]$Multi, [switch]$Preselected)
+    param([string[]]$Keys, [string[]]$Options, [switch]$Multi, [string[]]$Checked = @(), [int]$Start = 0)
     $global:MenuKeys = [System.Collections.Generic.Queue[string]]::new([string[]]$Keys)
     function global:Read-MenuKey { [pscustomobject]@{ Key = $global:MenuKeys.Dequeue() } }
-    Show-Menu -Title 'T' -Options $Options -Multi:$Multi -Preselected:$Preselected 6>$null
+    Show-Menu -Title 'T' -Options $Options -Multi:$Multi -Checked $Checked -Start $Start 6>$null
 }
 $m1 = Invoke-MenuWithKeys -Keys @('DownArrow', 'Enter') -Options @('A', 'B', 'C') -Multi
 Test-Assert ((@($m1) -join ',') -eq 'B') "Multi: Enter sin marcas elige la resaltada (RF-43, real=$(@($m1) -join ','))"
 $m2 = Invoke-MenuWithKeys -Keys @('Spacebar', 'DownArrow', 'DownArrow', 'Spacebar', 'Enter') -Options @('A', 'B', 'C') -Multi
 Test-Assert ((@($m2) -join ',') -eq 'A,C') "Multi: Espacio marca y Enter devuelve solo las marcadas (real=$(@($m2) -join ','))"
 $m3 = Invoke-MenuWithKeys -Keys @('Escape') -Options @('A', 'B') -Multi
-Test-Assert ($null -eq $m3) 'Multi: Esc cancela'
-$m4 = Invoke-MenuWithKeys -Keys @('Enter') -Options @('A', 'B', 'C') -Multi -Preselected
-Test-Assert (($m4.Count -eq 3) -and ((@($m4) -join ',') -eq 'A,B,C')) "Preseleccionado: Enter confirma todas (RF-44, real=$(@($m4) -join ','))"
-$m5 = Invoke-MenuWithKeys -Keys @('DownArrow', 'Spacebar', 'Enter') -Options @('A', 'B', 'C') -Multi -Preselected
-Test-Assert ((@($m5) -join ',') -eq 'A,C') "Preseleccionado: Espacio desmarca (real=$(@($m5) -join ','))"
-$m6 = Invoke-MenuWithKeys -Keys @('Spacebar', 'DownArrow', 'Spacebar', 'Enter') -Options @('A', 'B') -Multi -Preselected
-Test-Assert ($null -eq $m6) 'Preseleccionado: desmarcar todo y Enter cancela (RF-46)'
+Test-Assert ($m3 -eq $MenuBack) "Multi: Esc vuelve atras (RF-50, real=$m3)"
+$m4 = Invoke-MenuWithKeys -Keys @('Enter') -Options @('A', 'B', 'C') -Multi -Checked 'A', 'B', 'C'
+Test-Assert (($m4.Count -eq 3) -and ((@($m4) -join ',') -eq 'A,B,C')) "Todo marcado: Enter confirma todas (RF-44, real=$(@($m4) -join ','))"
+$m5 = Invoke-MenuWithKeys -Keys @('DownArrow', 'Spacebar', 'Enter') -Options @('A', 'B', 'C') -Multi -Checked 'A', 'B', 'C'
+Test-Assert ((@($m5) -join ',') -eq 'A,C') "Todo marcado: Espacio desmarca (real=$(@($m5) -join ','))"
+$m6 = Invoke-MenuWithKeys -Keys @('Spacebar', 'DownArrow', 'Spacebar', 'Enter') -Options @('A', 'B') -Multi -Checked 'A', 'B'
+Test-Assert ($null -eq $m6) 'Todo marcado: desmarcar todo y Enter cancela (RF-46)'
 $m7 = Invoke-MenuWithKeys -Keys @('DownArrow', 'DownArrow', 'Enter') -Options @('A', 'B', 'C')
 Test-Assert ($m7 -eq 2) 'Menu simple: Enter devuelve el indice resaltado'
+$m8 = Invoke-MenuWithKeys -Keys @('Enter') -Options @('A', 'B', 'C') -Multi -Checked 'B'
+Test-Assert ((@($m8) -join ',') -eq 'B') "-Checked recuerda la seleccion previa (RF-51, real=$(@($m8) -join ','))"
+$m9 = Invoke-MenuWithKeys -Keys @('Enter') -Options @('A', 'B', 'C') -Start 2
+Test-Assert ($m9 -eq 2) "-Start recuerda la opcion resaltada (RF-51, real=$m9)"
+$m10 = Invoke-MenuWithKeys -Keys @('Escape') -Options @('A', 'B')
+Test-Assert ($m10 -eq $MenuBack) 'Menu simple: Esc vuelve atras (RF-50)'
 Remove-Item function:\Read-MenuKey, function:\Clear-Host, function:\Show-Menu -ErrorAction SilentlyContinue
 
 $appsForScope = Get-Content $AppsConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -551,38 +558,129 @@ foreach ($case in $scopeCases) {
     $got = & $scopeKey (Get-ConfigScope -Category 'All' -Apps $case.Apps -AppsData $appsForScope)
     Test-Assert ($got -eq $case.Expected) "Get-ConfigScope con $($case.Apps -join ',') (RF-47/RF-48, real=$got)"
 }
-Remove-Item function:\Get-ConfigScope -ErrorAction SilentlyContinue
 
-# Flujo real del menu bajo iex en un proceso hijo: menu numerado (stdin redirigido),
-# Read-Host con respuestas fijas y apps.json local en vez de red. "Simulate first" sale sin tocar nada.
+# --- Spec 005: resumen (T44), pasos con Back y memoria (T45), ronda de instalacion (T46) ---
+$bootAst005 = [System.Management.Automation.Language.Parser]::ParseFile($bootPath, [ref]$null, [ref]$null)
+foreach ($fn in @('Get-ConfigScope', 'Format-InstallSummary', 'Invoke-InteractiveSetup', 'ConvertTo-PSLiteral', 'Get-ElevatedCommand', 'Invoke-InstallRound')) {
+    $fnAst = $bootAst005.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $fn }, $true)
+    if ($fnAst) { . ([scriptblock]::Create($fnAst.Extent.Text)) }
+    Test-Assert ($null -ne $fnAst) "bootstrap define $fn"
+}
+$allSkipped = @{ SkipGit = $true; SkipVSCode = $true; SkipOpenCode = $true; SkipBrave = $true }
+$sumGaming = Format-InstallSummary -Choices (@{ Category = 'Gaming'; Apps = @() } + $allSkipped) -AppsData $appsForScope
+Test-Assert (($sumGaming -match 'Gaming:') -and (@($appsForScope.Gaming | Where-Object { $sumGaming -notmatch [regex]::Escape($_) }).Count -eq 0) -and ($sumGaming -match 'Git: skipped')) 'Resumen Gaming lista sus 4 apps y Git omitido (RF-53)'
+$sumMixed = Format-InstallSummary -Choices @{ Category = 'All'; Apps = @('Brave.Brave', 'Git.Git', 'Valve.Steam'); GitUserName = 'Ana Lopez'; GitUserEmail = 'ana@example.com'; SkipVSCode = $true; SkipOpenCode = $true } -AppsData $appsForScope
+Test-Assert ($sumMixed -match '(?s)Base:\s+- Brave\.Brave\s+Dev:\s+- Git\.Git\s+Gaming:\s+- Valve\.Steam' -and $sumMixed -notmatch 'WinRAR') "Resumen agrupa cada app en su categoria (RF-53, real=$sumMixed)"
+Test-Assert ($sumMixed -match 'Git: Ana Lopez <ana@example\.com>' -and $sumMixed -match 'machine policy') 'Resumen muestra Git con nombre/email y Brave como politica (RF-53)'
+
+function Invoke-SetupWithReplies {
+    param([object[]]$Replies)
+    $global:MenuReplies = [System.Collections.Generic.Queue[object]]::new()
+    foreach ($r in $Replies) { $global:MenuReplies.Enqueue($r) }
+    $global:MenuCalls = [System.Collections.Generic.List[object]]::new()
+    function global:Invoke-Menu {
+        param($Title, $Options, [switch]$Multi, $Checked, $Start)
+        $global:MenuCalls.Add([pscustomobject]@{ Title = $Title; Options = $Options; Checked = $Checked; Start = $Start })
+        $x = $global:MenuReplies.Dequeue()
+        if ($x -is [array]) { , $x } else { $x }
+    }
+    function global:Read-Host { param($Prompt) throw "Read-Host not expected: $Prompt" }
+    Invoke-InteractiveSetup -AppsData $appsForScope 6>$null
+}
+$setup = Invoke-SetupWithReplies -Replies @(3, @('Valve.Steam', 'Discord.Discord'), 1, $MenuBack, 3, @('Valve.Steam', 'Discord.Discord'), 0)
+$appsCalls = @($global:MenuCalls | Where-Object { $_.Title -match 'Apps to install' })
+$catCalls = @($global:MenuCalls | Where-Object { $_.Title -match 'What do you want to install' })
+Test-Assert ($appsCalls.Count -eq 3 -and (@($appsCalls[1].Checked) -join ',') -eq 'Valve.Steam,Discord.Discord' -and (@($appsCalls[2].Checked) -join ',') -eq 'Valve.Steam,Discord.Discord') "Back desde el resumen y desde la lista conserva las apps marcadas (RF-50/RF-51)"
+Test-Assert ($catCalls.Count -eq 2 -and $catCalls[1].Start -eq 3 -and $catCalls[0].Options -contains 'Exit') 'Back a la categoria resalta la elegida y el primer menu ofrece Exit (RF-51/RF-52)'
+Test-Assert ((@($global:MenuCalls | Where-Object { $_.Title -match 'Are you sure you want to install these programs\?' }).Count -eq 2) -and ($global:MenuCalls[2].Options -join ',') -eq 'Install,Back,Cancel') 'Resumen pregunta si esta seguro con Install/Back/Cancel (RF-54)'
+Test-Assert ($setup.Category -eq 'Gaming' -and (@($setup.Apps) -join ',') -eq 'Valve.Steam,Discord.Discord' -and $setup.SkipGit -and $setup.SkipVSCode -and $setup.SkipOpenCode -and $setup.SkipBrave) 'Install devuelve las opciones con los Skip* de Get-ConfigScope (RF-54)'
+Test-Assert (@($global:MenuCalls | Where-Object { ($_.Options -join ',') -match 'Simulate' }).Count -eq 0) 'Sin opcion "Simulate first" (aprobado spec 005)'
+$setupReset = Invoke-SetupWithReplies -Replies @(3, @('Valve.Steam'), 1, $MenuBack, 1, $null)
+$resetCall = @($global:MenuCalls | Where-Object { $_.Title -match 'Apps to install \(Base\)' })[0]
+Test-Assert ($null -eq $setupReset -and (@($resetCall.Checked) -join ',') -eq (@($appsForScope.Base) -join ',')) 'Cambiar de categoria reinicia la lista marcada; cancelar devuelve $null'
+$setupExit = Invoke-SetupWithReplies -Replies @(4)
+$setupEsc = Invoke-SetupWithReplies -Replies @($MenuBack)
+Test-Assert ($null -eq $setupExit -and $null -eq $setupEsc) 'Exit o Esc en el primer menu salen (RF-52)'
+$setupCancel = Invoke-SetupWithReplies -Replies @(3, @('Valve.Steam'), 2)
+Test-Assert ($null -eq $setupCancel) 'Cancel en el resumen no instala (RF-54)'
+$setupDev = Invoke-SetupWithReplies -Replies @(2, @('Git.Git'), 1, 2, 1, $MenuBack, 1, 0, 0)
+$devTitles = @($global:MenuCalls | ForEach-Object { $_.Title -replace '(?s)\n.*', '' })
+Test-Assert ((($devTitles | Select-Object -Skip 2) -join '|') -match '^Git configuration\?\|OpenCode configuration\?\|Git configuration\?\|OpenCode configuration\?\|') "Back desde OpenCode vuelve a Git, el paso anterior visible (RF-50, real=$($devTitles -join '|'))"
+Test-Assert ($setupDev.SkipGit -and -not $setupDev.SkipOpenCode -and $setupDev.SkipVSCode) 'Dev solo Git: Git omitido, OpenCode instalado, VSCode no aplica'
+Remove-Item function:\Invoke-Menu, function:\Read-Host, function:\Invoke-SetupWithReplies -ErrorAction SilentlyContinue
+
+$global:SpCalls = [System.Collections.Generic.List[object]]::new()
+function Start-Process {
+    param($FilePath, $ArgumentList, $Verb, [switch]$Wait, [switch]$PassThru, [switch]$NoNewWindow)
+    if ($global:SpThrow) { throw 'The operation was canceled by the user.' }
+    $global:SpCalls.Add([pscustomobject]@{ Verb = $Verb; NoNewWindow = [bool]$NoNewWindow; Cmd = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($ArgumentList[-1])) })
+    [pscustomobject]@{ ExitCode = 5 }
+}
+$roundParams = [ordered]@{ Category = 'Dev'; Repo = 'o/r'; Branch = 'master'; GitUserName = 'Ana Lopez' }
+$noLogs = Join-Path ([System.IO.Path]::GetTempPath()) 'no-logs-here'
+$global:SpThrow = $false
+$rc1 = Invoke-InstallRound -Params $roundParams -Switches @('SkipBrave') -IsAdmin $false -ScriptPath '' -RawUrl 'https://raw.example/b.ps1' -LogDir $noLogs 6>$null
+$rc2 = Invoke-InstallRound -Params $roundParams -IsAdmin $true -ScriptPath '' -RawUrl 'https://raw.example/b.ps1' -LogDir $noLogs 6>$null
+Test-Assert ($rc1 -eq 5 -and $rc2 -eq 5) "Invoke-InstallRound devuelve el exit code del hijo (RF-55, real=$rc1/$rc2)"
+Test-Assert ($global:SpCalls[0].Verb -eq 'RunAs' -and -not $global:SpCalls[1].Verb -and $global:SpCalls[1].NoNewWindow) 'Sin admin pide UAC; con admin, mismo terminal sin UAC (D32/D36)'
+Test-Assert ($global:SpCalls[0].Cmd -match "-GitUserName 'Ana Lopez'" -and $global:SpCalls[0].Cmd -match '-SkipBrave' -and $global:SpCalls[1].Cmd -notmatch '-SkipBrave') 'Invoke-InstallRound pasa las opciones al hijo (nombre con espacios intacto)'
+$global:SpThrow = $true
+$rc3 = Invoke-InstallRound -Params $roundParams -IsAdmin $false -ScriptPath '' -RawUrl 'https://raw.example/b.ps1' -LogDir $noLogs 3>$null 6>$null
+Test-Assert ($rc3 -eq 1) "UAC rechazado devuelve 1 (real=$rc3)"
+Remove-Item function:\Start-Process -ErrorAction SilentlyContinue
+foreach ($fn in @('Get-ConfigScope', 'Format-InstallSummary', 'Invoke-InteractiveSetup', 'ConvertTo-PSLiteral', 'Get-ElevatedCommand', 'Invoke-InstallRound')) { Remove-Item "function:\$fn" -ErrorAction SilentlyContinue }
+
+# Flujo real del menu bajo iex en un proceso hijo (T47): menu numerado (stdin redirigido),
+# Read-Host con respuestas fijas, apps.json local y Start-Process falso que vuelca el comando del hijo.
 function Invoke-BootstrapMenu {
-    param([string[]]$Answers)
+    param([string[]]$Answers, [int[]]$ChildExits = @())
     $answerList = ($Answers | ForEach-Object { "'$_'" }) -join ','
+    $exitList = $ChildExits -join ','
     $childCmd = @"
 `$global:MenuAnswers = [System.Collections.Generic.Queue[string]]::new([string[]]@($answerList))
+`$global:FakeExits = [System.Collections.Generic.Queue[int]]::new([int[]]@($exitList))
 function Read-Host { param(`$Prompt) if (`$global:MenuAnswers.Count) { `$global:MenuAnswers.Dequeue() } else { '' } }
 function Invoke-RestMethod { param(`$Uri) Get-Content -Raw '$AppsConfigPath' -Encoding UTF8 | ConvertFrom-Json }
+function Start-Process {
+    param(`$FilePath, `$ArgumentList, `$Verb, [switch]`$Wait, [switch]`$PassThru, [switch]`$NoNewWindow)
+    Write-Host ('FAKE-INSTALL ' + [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String(`$ArgumentList[-1])))
+    [pscustomobject]@{ ExitCode = `$(if (`$global:FakeExits.Count) { `$global:FakeExits.Dequeue() } else { 0 }) }
+}
 Get-Content -Raw '$bootPath' | Invoke-Expression
+exit `$LASTEXITCODE
 "@
     $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childCmd))
-    '' | & pwsh -NoProfile -EncodedCommand $enc *>&1 | Out-String
+    # -OutputFormat Text: otherwise pwsh-to-pwsh prints Write-Host twice (raw + CLIXML).
+    $out = '' | & pwsh -NoProfile -OutputFormat Text -EncodedCommand $enc *>&1 | Out-String
+    [pscustomobject]@{ Out = $out; Exit = $LASTEXITCODE; Installs = ([regex]::Matches($out, 'FAKE-INSTALL')).Count }
 }
-$flowGaming = Invoke-BootstrapMenu -Answers @('4', '1,2,4', '2')
-Test-Assert ($flowGaming -notmatch 'Custom per-app') 'Menu de alcance sin "Custom per-app" (RF-45)'
-Test-Assert ($flowGaming -match 'Apps to install \(Gaming\)') 'Gaming muestra su lista de apps (RF-44)'
-Test-Assert ($flowGaming -notmatch 'Git configuration\?|VSCode configuration\?|OpenCode configuration\?') 'Gaming no pregunta por Git/VSCode/OpenCode (RF-47/RF-48)'
-Test-Assert ($flowGaming -match 'Category=Gaming Apps=3 Git=skipped VSCode=skipped OpenCode=skipped Brave=skipped') "Gaming con 3 de 4 apps: -Apps y todo omitido (RF-44/RF-47)"
-$flowDev = Invoke-BootstrapMenu -Answers @('3', '1,2,3,4,5,6', '2', '1', '2', '2')
-Test-Assert (($flowDev -match 'Git configuration\?') -and ($flowDev -match 'VSCode configuration\?') -and ($flowDev -match 'OpenCode configuration\?')) 'Dev completo pregunta Git, VSCode y OpenCode'
-Test-Assert ($flowDev -match 'Category=Dev Apps=all Git=skipped VSCode=extensions OpenCode=skipped Brave=skipped') 'Dev completo sin -Apps y respuestas aplicadas'
-$flowDevGit = Invoke-BootstrapMenu -Answers @('3', '2', '2', '2', '2')
-Test-Assert (($flowDevGit -match 'Git configuration\?') -and ($flowDevGit -match 'OpenCode configuration\?') -and ($flowDevGit -notmatch 'VSCode configuration\?')) 'Dev solo Git: pregunta Git y OpenCode, no VSCode (RF-47/RF-48)'
-$flowBase = Invoke-BootstrapMenu -Answers @('2', '2,3', '2')
-Test-Assert ($flowBase -match 'Category=Base Apps=2 .*Brave=skipped') 'Base sin Brave.Brave no aplica extensiones de Brave (RF-47)'
-$flowBaseBrave = Invoke-BootstrapMenu -Answers @('2', '1,2', '2')
-Test-Assert ($flowBaseBrave -match 'Brave=forced extensions') 'Base con Brave.Brave aplica extensiones de Brave (RF-47)'
+$flowGaming = Invoke-BootstrapMenu -Answers @('4', '1,2,4', '1', '2')
+Test-Assert ($flowGaming.Out -notmatch 'Custom per-app') 'Menu de alcance sin "Custom per-app" (RF-45)'
+Test-Assert ($flowGaming.Out -match 'Apps to install \(Gaming\)') 'Gaming muestra su lista de apps (RF-44)'
+Test-Assert ($flowGaming.Out -notmatch 'Git configuration\?|VSCode configuration\?|OpenCode configuration\?') 'Gaming no pregunta por Git/VSCode/OpenCode (RF-47/RF-48)'
+Test-Assert ($flowGaming.Out -match "FAKE-INSTALL .*-Category 'Gaming'.*-Apps 'Valve\.Steam','EpicGames\.EpicGamesLauncher','Discord\.Discord' -SkipGit -SkipVSCode -SkipOpenCode -SkipBrave") "Gaming con 3 de 4 apps: -Apps y todo omitido (RF-44/RF-47)"
+Test-Assert ($flowGaming.Out -match 'Are you sure you want to install these programs\?' -and $flowGaming.Out -match '- Discord\.Discord') 'Gaming muestra el resumen antes de instalar (RF-53/RF-54)'
+$flowDev = Invoke-BootstrapMenu -Answers @('3', '1,2,3,4,5,6', '2', '1', '2', '1', '2')
+Test-Assert (($flowDev.Out -match 'Git configuration\?') -and ($flowDev.Out -match 'VSCode configuration\?') -and ($flowDev.Out -match 'OpenCode configuration\?')) 'Dev completo pregunta Git, VSCode y OpenCode'
+Test-Assert ($flowDev.Out -match "FAKE-INSTALL .*-Category 'Dev' -Repo .* -SkipGit -SkipOpenCode -SkipBrave;" -and $flowDev.Out -notmatch 'FAKE-INSTALL .*-Apps') 'Dev completo sin -Apps y respuestas aplicadas'
+$flowDevGit = Invoke-BootstrapMenu -Answers @('3', '2', '2', '2', '3')
+Test-Assert (($flowDevGit.Out -match 'Git configuration\?') -and ($flowDevGit.Out -match 'OpenCode configuration\?') -and ($flowDevGit.Out -notmatch 'VSCode configuration\?')) 'Dev solo Git: pregunta Git y OpenCode, no VSCode (RF-47/RF-48)'
+$flowBase = Invoke-BootstrapMenu -Answers @('2', '2,3', '3')
+Test-Assert ($flowBase.Out -match 'Brave: skipped' -and $flowBase.Installs -eq 0) 'Base sin Brave.Brave no aplica extensiones de Brave; Cancel no instala (RF-47/RF-54)'
+$flowBaseBrave = Invoke-BootstrapMenu -Answers @('2', '1,2', '3')
+Test-Assert ($flowBaseBrave.Out -match 'Brave: forced extensions') 'Base con Brave.Brave aplica extensiones de Brave (RF-47)'
 $flowEmpty = Invoke-BootstrapMenu -Answers @('4', '')
-Test-Assert ($flowEmpty -match 'Cancelled') 'Lista vacia en menu numerado cancela (RF-46)'
+Test-Assert ($flowEmpty.Out -match 'Cancelled' -and $flowEmpty.Exit -eq 0) 'Lista vacia en menu numerado cancela con 0 (RF-46)'
+$flowBack = Invoke-BootstrapMenu -Answers @('4', '0', '4', '1,2', '2', '1', '3')
+Test-Assert (([regex]::Matches($flowBack.Out, 'What do you want to install\?')).Count -eq 2 -and ([regex]::Matches($flowBack.Out, 'Apps to install \(Gaming\)')).Count -eq 3 -and $flowBack.Installs -eq 0) 'Menu numerado: 0 vuelve atras desde la lista y Back desde el resumen (RF-50/RNF-2)'
+$flowGit = Invoke-BootstrapMenu -Answers @('3', '2', '1', 'Ana Lopez', 'ana@example.com', '2', '1', '2')
+Test-Assert ($flowGit.Out -match 'Git: Ana Lopez <ana@example\.com>' -and $flowGit.Out -match "FAKE-INSTALL .*-GitUserName 'Ana Lopez' -GitUserEmail 'ana@example\.com'") 'Git con nombre con espacios llega al resumen y al hijo'
+$flowLoop = Invoke-BootstrapMenu -Answers @('2', '2,3', '1', '1', '4', '1,2', '1', '2')
+Test-Assert ($flowLoop.Installs -eq 2 -and $flowLoop.Exit -eq 0 -and $flowLoop.Out -match 'Install something else') "Bucle: Base y luego Gaming lanzan dos instalaciones y salen con 0 (RF-55/RF-56, real=$($flowLoop.Installs)/$($flowLoop.Exit))"
+$flowFail = Invoke-BootstrapMenu -Answers @('4', '1', '1', '1', '4', '2', '1', '2') -ChildExits 1, 0
+Test-Assert ($flowFail.Installs -eq 2 -and $flowFail.Exit -eq 1 -and $flowFail.Out -match 'exit code 1') "Bucle: una vuelta fallida hace salir con 1 (RF-57, real=$($flowFail.Exit))"
+$flowExit = Invoke-BootstrapMenu -Answers @('5')
+Test-Assert ($flowExit.Installs -eq 0 -and $flowExit.Exit -eq 0) 'Exit en el primer menu sale con 0 sin instalar (RF-52)'
 Remove-Item function:\Invoke-BootstrapMenu -ErrorAction SilentlyContinue
 
 # -Apps sin menu: los -Skip* se derivan de la seleccion tras extraer (RF-47/RF-48)
@@ -677,7 +775,6 @@ exit 7
 }
 Test-Assert ($boot -match 'OpenCode configuration\?') 'bootstrap.ps1 menu pregunta por OpenCode'
 Test-Assert ($boot -notmatch 'Brave configuration\?') 'bootstrap.ps1 no pregunta por Brave (automatico en Base/All)'
-Test-Assert ($boot -match 'braveApplies') 'bootstrap.ps1 deriva Brave del alcance en confirmacion'
 
 # Test funcional de Show-NumberedMenu extrayendo la funcion (Read-Host mockeado, sin consola)
 if ($boot -match '(?s)(function Show-NumberedMenu \{.*?\n\})\s*\$ZipUrl') {
@@ -697,6 +794,12 @@ if ($boot -match '(?s)(function Show-NumberedMenu \{.*?\n\})\s*\$ZipUrl') {
     } catch {
         Test-Assert $false 'Menu numerado multi-seleccion' "$_"
     }
+    function Read-Host { param($Prompt) return '0' }
+    $backSingle = Show-NumberedMenu -Title 'T' -Options @('A', 'B')
+    $backMulti = Show-NumberedMenu -Title 'T' -Options @('A', 'B') -Multi
+    Test-Assert ($backSingle -eq $MenuBack -and $backMulti -eq $MenuBack) 'Menu numerado: 0 vuelve atras (RNF-2)'
+    function Read-Host { param($Prompt) return '' }
+    Test-Assert ($null -eq (Show-NumberedMenu -Title 'T' -Options @('A', 'B'))) 'Menu numerado: vacio cancela (RNF-2)'
     Remove-Item function:\Read-Host -ErrorAction SilentlyContinue
     Remove-Item function:\Show-NumberedMenu -ErrorAction SilentlyContinue
 } else {

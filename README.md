@@ -26,10 +26,13 @@ irm https://raw.githubusercontent.com/alexp11mon/windows-11-auto-setup/master/bo
 
 El menú funciona así:
 
-1. Eliges la categoría: `All`, `Base`, `Dev` o `Gaming`.
+1. Eliges la categoría: `All`, `Base`, `Dev` o `Gaming` (o `Exit` para salir).
 2. Aparecen sus apps, todas marcadas. Con ↑/↓ te mueves, **Espacio** marca o desmarca y **Enter** confirma. Si no hay ninguna marcada, Enter elige la app resaltada; si las desmarcas todas, se cancela.
 3. Solo se pregunta por lo que vas a instalar: Git si eliges `Git.Git`, VSCode si eliges `Microsoft.VisualStudioCode` y OpenCode si eliges alguna app de `Dev`. Las extensiones de Brave se aplican sin preguntar solo si eliges `Brave.Brave`.
-4. Confirmas, simulas o cancelas. La ventana nunca se cierra sola: al terminar (o cancelar) vuelve al prompt y el resultado queda en `$LASTEXITCODE` (`0` ok).
+4. Ves un resumen con todas las apps agrupadas por categoría y las configuraciones, y te pregunta si estás seguro: `Install`, `Back` o `Cancel`.
+5. Al terminar ves el resultado y la ruta del log, y eliges `Install something else` (vuelve al paso 1) o `Exit`. Sin admin, cada instalación pide UAC.
+
+En cualquier paso, **Esc** o la opción `Back` vuelve al paso anterior y conserva lo que habías elegido (en el menú numerado, `0`). La ventana nunca se cierra sola: al salir vuelve al prompt y el resultado queda en `$LASTEXITCODE` (`1` si alguna instalación de la sesión falló, `0` si no).
 
 ```powershell
 # Opción B: descargar el lanzador y ejecutarlo con parámetros
@@ -169,10 +172,10 @@ Con `Base` o `All` (salvo `-SkipBrave` y sin pregunta en el menú):
 ## Tests (no instalan nada, todo mockeado)
 
 ```powershell
-# Suite principal sin dependencias (238 checks)
+# Suite principal sin dependencias (271 checks)
 pwsh -NoProfile -File tests/Runner-Mock.ps1
 
-# Tests Pester 5 (requiere Install-Module Pester -MinimumVersion 5.0, 79 tests)
+# Tests Pester 5 (requiere Install-Module Pester -MinimumVersion 5.0, 85 tests)
 Invoke-Pester -Path ./tests -Output Detailed
 ```
 
@@ -190,7 +193,7 @@ Invoke-Pester -Path ./tests -Output Detailed
 ## Estructura
 
 - `install.ps1`: punto de entrada. Chequea administrador, Windows 11 64-bit y winget. Flags `-Category` (`Base`, `Dev`, `Gaming`, `All`), `-GitUserName`/`-GitUserEmail`, `-SkipGit`/`-SkipVSCode`/`-SkipOpenCode`/`-SkipBrave` y `-WhatIf`. Marca `exit 1` si hubo algún `ERROR`.
-- `bootstrap.ps1`: instalación en línea. Descarga el ZIP de GitHub (rama o tag), lo verifica con `-Sha256` si se indica, se auto-eleva a admin y ejecuta `install.ps1` con los mismos flags más `-Branch`, `-KeepDownload` y `-Apps`. Sin parámetros abre menú con flechas (categoría, apps de la categoría, Git/VSCode/OpenCode solo si aplican, confirmación).
+- `bootstrap.ps1`: instalación en línea. Descarga el ZIP de GitHub (rama o tag), lo verifica con `-Sha256` si se indica, se auto-eleva a admin y ejecuta `install.ps1` con los mismos flags más `-Branch`, `-KeepDownload` y `-Apps`. Sin parámetros abre menú con flechas (categoría, apps de la categoría, Git/VSCode/OpenCode solo si aplican, resumen y confirmación) con `Back`/Esc en cada paso, y al terminar permite seguir instalando.
 - `config/apps.json`: lista de apps winget por categoría (`Base`, `Dev`, `Gaming`).
 - `config/vscode/extensions.json`: extensiones de VSCode a instalar.
 - `config/opencode/`: copia versionada de la configuración global de OpenCode (agentes, skills, `opencode.jsonc`), sin secretos ni rutas personales.

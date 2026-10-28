@@ -6,7 +6,8 @@ BeforeAll {
     $bootAst = [System.Management.Automation.Language.Parser]::ParseFile($script:BootPath, [ref]$null, [ref]$null)
     $script:AppsData = Get-Content (Join-Path $RepoRoot 'config/apps.json') -Raw -Encoding UTF8 | ConvertFrom-Json
     $script:AppsPath = Join-Path $RepoRoot 'config/apps.json'
-    foreach ($fn in @('ConvertTo-PSLiteral', 'Get-ElevatedCommand', 'Save-RunLogs', 'Show-Menu', 'Get-ConfigScope', 'Read-MenuKey')) {
+    $script:MenuBack = '<back>'
+    foreach ($fn in @('ConvertTo-PSLiteral', 'Get-ElevatedCommand', 'Save-RunLogs', 'Show-Menu', 'Get-ConfigScope', 'Read-MenuKey', 'Format-InstallSummary', 'Invoke-InteractiveSetup', 'Invoke-InstallRound')) {
         $fnAst = $bootAst.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $fn }, $true)
         . ([scriptblock]::Create($fnAst.Extent.Text))
     }
@@ -63,12 +64,11 @@ Describe 'bootstrap.ps1 online installer' {
     It 'Menu asks for OpenCode; Brave applies automatically and says it is forced by policy' {
         $script:Boot | Should -Match 'OpenCode configuration\?'
         $script:Boot | Should -Not -Match 'Brave configuration\?'
-        $script:Boot | Should -Match 'braveApplies'
         $script:Boot | Should -Match 'machine policy'
     }
     It 'Elevation never mixes -Verb with -Redirect* (RF-28)' {
         $script:Boot | Should -Not -Match 'RedirectStandard'
-        $script:Boot | Should -Match 'Elevated installer exited with code'
+        $script:Boot | Should -Match 'Installer exited with code'
     }
     It 'Starts under iex without param-block errors (real one-liner path)' {
         $out = & pwsh -NoProfile -NonInteractive -Command "Get-Content -Raw '$($script:BootPath)' | Invoke-Expression" 2>&1 | Out-String
@@ -114,9 +114,9 @@ exit 7
         BeforeEach {
             function Clear-Host { }
             function Invoke-Keys {
-                param([string[]]$Keys, [string[]]$Options, [switch]$Multi, [switch]$Preselected)
+                param([string[]]$Keys, [string[]]$Options, [switch]$Multi, [string[]]$Checked = @(), [int]$Start = 0)
                 $script:Keys = [System.Collections.Generic.Queue[string]]::new([string[]]$Keys)
-                Show-Menu -Title 'T' -Options $Options -Multi:$Multi -Preselected:$Preselected 6>$null
+                Show-Menu -Title 'T' -Options $Options -Multi:$Multi -Checked $Checked -Start $Start 6>$null
             }
             Mock Read-MenuKey { [pscustomobject]@{ Key = $script:Keys.Dequeue() } }
         }
@@ -125,13 +125,67 @@ exit 7
             $picked.Count | Should -Be 1
             $picked | Should -Be 'B'
         }
-        It 'Preselected list confirms everything with Enter (RF-44)' {
-            $picked = Invoke-Keys -Keys 'Enter' -Options 'A', 'B' -Multi -Preselected
+        It 'Fully checked list confirms everything with Enter (RF-44)' {
+            $picked = Invoke-Keys -Keys 'Enter' -Options 'A', 'B' -Multi -Checked 'A', 'B'
             $picked.Count | Should -Be 2
             $picked | Should -Be @('A', 'B')
         }
         It 'Unmarking everything and pressing Enter cancels (RF-46)' {
-            Invoke-Keys -Keys 'Spacebar', 'DownArrow', 'Spacebar', 'Enter' -Options 'A', 'B' -Multi -Preselected | Should -BeNullOrEmpty
+            Invoke-Keys -Keys 'Spacebar', 'DownArrow', 'Spacebar', 'Enter' -Options 'A', 'B' -Multi -Checked 'A', 'B' | Should -BeNullOrEmpty
+        }
+        It 'Esc goes back instead of cancelling (RF-50)' {
+            Invoke-Keys -Keys 'Escape' -Options 'A', 'B' -Multi | Should -Be $script:MenuBack
+            Invoke-Keys -Keys 'Escape' -Options 'A', 'B' | Should -Be $script:MenuBack
+        }
+        It 'Remembers marks and the highlighted option (RF-51)' {
+            $picked = Invoke-Keys -Keys 'Enter' -Options 'A', 'B', 'C' -Multi -Checked 'B'
+            $picked | Should -Be 'B'
+            Invoke-Keys -Keys 'Enter' -Options 'A', 'B', 'C' -Start 2 | Should -Be 2
+        }
+    }
+    Context 'Back, summary and install rounds (spec 005)' {
+        BeforeEach {
+            $script:Replies = [System.Collections.Generic.Queue[object]]::new()
+            $script:Calls = [System.Collections.Generic.List[object]]::new()
+            function Invoke-Menu {
+                param($Title, $Options, [switch]$Multi, $Checked, $Start)
+                $script:Calls.Add([pscustomobject]@{ Title = $Title; Options = $Options; Checked = $Checked; Start = $Start })
+                $x = $script:Replies.Dequeue()
+                if ($x -is [array]) { , $x } else { $x }
+            }
+            function Invoke-Setup { param([object[]]$Replies) foreach ($r in $Replies) { $script:Replies.Enqueue($r) }; Invoke-InteractiveSetup -AppsData $script:AppsData 6>$null }
+        }
+        It 'Summary groups apps by category and lists the config (RF-53)' {
+            $sum = Format-InstallSummary -Choices @{ Category = 'All'; Apps = @('Brave.Brave', 'Valve.Steam'); SkipGit = $true; SkipVSCode = $true; SkipOpenCode = $true } -AppsData $script:AppsData
+            $sum | Should -Match '(?s)Base:\s+- Brave\.Brave\s+Gaming:\s+- Valve\.Steam'
+            $sum | Should -Not -Match 'Dev:'
+            $sum | Should -Match 'Git: skipped'
+            $sum | Should -Match 'machine policy'
+        }
+        It 'Back from the summary keeps the marked apps; Install returns the choices (RF-50, RF-51, RF-54)' {
+            $got = Invoke-Setup -Replies @(3, @('Valve.Steam'), 1, @('Valve.Steam'), 0)
+            $apps = @($script:Calls | Where-Object { $_.Title -match 'Apps to install' })
+            @($apps[1].Checked) | Should -Be @('Valve.Steam')
+            ($script:Calls[2].Title) | Should -Match 'Are you sure you want to install these programs\?'
+            ($script:Calls[2].Options -join ',') | Should -Be 'Install,Back,Cancel'
+            $got.Category | Should -Be 'Gaming'
+            @($got.Apps) | Should -Be @('Valve.Steam')
+            $got.SkipGit | Should -BeTrue
+        }
+        It 'Exit, Esc on the first menu and Cancel on the summary return nothing (RF-52, RF-54)' {
+            Invoke-Setup -Replies @(4) | Should -BeNullOrEmpty
+            Invoke-Setup -Replies @($script:MenuBack) | Should -BeNullOrEmpty
+            Invoke-Setup -Replies @(3, @('Valve.Steam'), 2) | Should -BeNullOrEmpty
+        }
+        It 'Each round runs in a child process: UAC only without admin; a refused UAC returns 1 (RF-55)' {
+            Mock Start-Process { [pscustomobject]@{ ExitCode = 3 } }
+            $p = [ordered]@{ Category = 'Base'; Repo = 'o/r'; Branch = 'master' }
+            Invoke-InstallRound -Params $p -IsAdmin $false -ScriptPath '' -RawUrl 'https://x' -LogDir $TestDrive 6>$null | Should -Be 3
+            Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter { $Verb -eq 'RunAs' }
+            Invoke-InstallRound -Params $p -IsAdmin $true -ScriptPath '' -RawUrl 'https://x' -LogDir $TestDrive 6>$null | Should -Be 3
+            Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter { $NoNewWindow }
+            Mock Start-Process { throw 'cancelled' }
+            Invoke-InstallRound -Params $p -IsAdmin $false -ScriptPath '' -RawUrl 'https://x' -LogDir $TestDrive 3>$null 6>$null | Should -Be 1
         }
     }
     It 'Get-ConfigScope follows the selected apps (RF-47, RF-48)' {
@@ -142,18 +196,23 @@ exit 7
         $s = Get-ConfigScope -Category 'Gaming' -AppsData $script:AppsData
         @($s.Git, $s.VSCode, $s.OpenCode, $s.Brave) | Should -Be @($false, $false, $false, $false)
     }
-    It 'Gaming menu lists its apps and asks nothing about Git/VSCode/OpenCode (RF-44, RF-45, RF-47)' {
+    It 'Gaming menu lists its apps, asks nothing about Git/VSCode/OpenCode and loops until Exit (RF-44, RF-47, RF-55, RF-56)' {
         $childCmd = @"
-`$global:MenuAnswers = [System.Collections.Generic.Queue[string]]::new([string[]]@('4', '1,2,4', '2'))
+`$global:MenuAnswers = [System.Collections.Generic.Queue[string]]::new([string[]]@('4', '1,2,4', '1', '1', '2', '2,3', '1', '2'))
 function Read-Host { param(`$Prompt) if (`$global:MenuAnswers.Count) { `$global:MenuAnswers.Dequeue() } else { '' } }
 function Invoke-RestMethod { param(`$Uri) Get-Content -Raw '$($script:AppsPath)' -Encoding UTF8 | ConvertFrom-Json }
+function Start-Process { param(`$FilePath, `$ArgumentList, `$Verb, [switch]`$Wait, [switch]`$PassThru, [switch]`$NoNewWindow) Write-Host ('FAKE-INSTALL ' + [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String(`$ArgumentList[-1]))); [pscustomobject]@{ ExitCode = 0 } }
 Get-Content -Raw '$($script:BootPath)' | Invoke-Expression
+exit `$LASTEXITCODE
 "@
-        $out = '' | & pwsh -NoProfile -EncodedCommand ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childCmd))) *>&1 | Out-String
+        $out = '' | & pwsh -NoProfile -OutputFormat Text -EncodedCommand ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childCmd))) *>&1 | Out-String
+        $LASTEXITCODE | Should -Be 0
         $out | Should -Not -Match 'Custom per-app'
         $out | Should -Match 'Apps to install \(Gaming\)'
         $out | Should -Not -Match 'Git configuration\?'
-        $out | Should -Match 'Category=Gaming Apps=3 Git=skipped VSCode=skipped OpenCode=skipped Brave=skipped'
+        $out | Should -Match 'Are you sure you want to install these programs\?'
+        $out | Should -Match "FAKE-INSTALL .*-Category 'Gaming'.*-Apps 'Valve\.Steam','EpicGames\.EpicGamesLauncher','Discord\.Discord' -SkipGit -SkipVSCode -SkipOpenCode -SkipBrave"
+        ([regex]::Matches($out, 'FAKE-INSTALL')).Count | Should -Be 2
     }
     It 'Verifies -Sha256 before extracting (RF-32)' {
         $pattern = ((Get-Command $script:BootPath).Parameters['Sha256'].Attributes | Where-Object { $_ -is [System.Management.Automation.ValidatePatternAttribute] }).RegexPattern
