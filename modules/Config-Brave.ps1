@@ -41,11 +41,13 @@ function Invoke-BraveConfig {
         if (-not (Test-Path $PolicyRoot)) {
             New-Item -Path $PolicyRoot -Force | Out-Null
         }
-        $enforcedValues = @(
+        # Read the policy list once; new slots are tracked in memory.
+        $policies = @(
             (Get-ItemProperty -Path $PolicyRoot -ErrorAction SilentlyContinue).PSObject.Properties |
-                Where-Object { $_.Name -match '^\d+$' } |
-                Select-Object -ExpandProperty Value
+                Where-Object { $_.Name -match '^\d+$' }
         )
+        $enforcedValues = @($policies | Select-Object -ExpandProperty Value)
+        $takenNames = @($policies | Select-Object -ExpandProperty Name)
         foreach ($ext in $DesiredExtensions) {
             $id = $ext.id
             $name = if ($ext.name) { $ext.name } else { $id }
@@ -63,17 +65,13 @@ function Invoke-BraveConfig {
                 continue
             }
             Write-InstallLog -Message "Enforcing Brave extension: $name..." -Level "INFO"
-            $takenNames = @(
-                (Get-ItemProperty -Path $PolicyRoot -ErrorAction SilentlyContinue).PSObject.Properties |
-                    Where-Object { $_.Name -match '^\d+$' } |
-                    Select-Object -ExpandProperty Name
-            )
             $slot = 1
             while ($takenNames -contains "$slot") { $slot++ }
             New-ItemProperty -Path $PolicyRoot -Name "$slot" -Value "$id;$UpdateUrl" -Force | Out-Null
             $enforcedValues += "$id;$UpdateUrl"
+            $takenNames += "$slot"
         }
-        Write-InstallLog -Message "Brave extensions enforced. Restart Brave to apply them." -Level "WARNING"
+        Write-InstallLog -Message "Brave extensions enforced by machine policy (they cannot be removed from Brave). Restart Brave to apply them." -Level "WARNING"
     } else {
         Write-InstallLog -Message "Simulation mode. Would enforce $($DesiredExtensions.Count) Brave extensions under: $PolicyRoot" -Level "INFO"
     }

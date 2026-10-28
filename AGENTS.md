@@ -29,25 +29,27 @@ Configurador de PC nuevo con Windows 11 64-bit: instala apps vía winget por cat
 # Online (pwsh 7, auto-eleva solo)
 irm https://raw.githubusercontent.com/alexp11mon/windows-11-auto-setup/master/bootstrap.ps1 | iex
 .\bootstrap.ps1 -Category All -Branch master
+.\bootstrap.ps1 -Category All -Branch v1.0.0 -Sha256 <hash>   # release fija verificada
+.\bootstrap.ps1 -Apps Valve.Steam,Brave.Brave
 ```
 
-Salidas: `0` ok, `1` falta admin/OS/winget/módulo o cualquier `ERROR` en `logs/`. `bootstrap` propaga el exit de `install`; bajo `iex` usa `return` + `$LASTEXITCODE`, nunca `exit`.
+Salidas: `0` ok, `1` falta admin/OS/winget/módulo, SHA256 distinto o cualquier `ERROR` en `logs/` (en línea, copia en `%LOCALAPPDATA%\win11-setup\logs`). `bootstrap` propaga el exit de `install`; bajo `iex` usa `return` + `$LASTEXITCODE`, nunca `exit`.
 
 ## Estructura
 
 - `install.ps1`: entry local. Guards admin/OS/winget, `Join-Path` rutas, `Update-SessionPath`, orquesta categorías + Git/VSCode/OpenCode solo si Dev/All + Brave solo si Base/All.
-- `bootstrap.ps1`: entry online. ZIP de `$Repo/$Branch` a `%TEMP%\win11-setup-*`, 2 intentos descarga, `Show-Menu` flechas + `Show-NumberedMenu` fallback, custom filtra `apps.json`, `-KeepDownload` conserva. Menú pregunta OpenCode (Brave automático en Base/All).
+- `bootstrap.ps1`: entry online. ZIP de `archive/$Branch.zip` (rama o tag) a `%TEMP%\win11-setup-*`, 2 intentos descarga, `-Sha256` opcional antes de extraer, `Show-Menu` flechas + `Show-NumberedMenu` fallback, `-Apps` filtra `apps.json`, `Save-RunLogs` antes de limpiar, `-KeepDownload` conserva. Elevación con `-EncodedCommand` (`Get-ElevatedCommand`): nunca `-Verb` + `-Redirect*` ni script en `%TEMP%`. `install.ps1` se invoca con `& pwsh @installArgs` (`Start-Process` no entrecomilla valores con espacios). Menú pregunta OpenCode (Brave automático en Base/All, avisado como política de equipo).
 - `config/apps.json`: `{Base[], Dev[], Gaming[]}` con IDs winget exactos. Datos, no lógica.
 - `config/vscode/extensions.json`: `{extensions[]}`. `config/brave/extensions.json`: `{extensions[{id, name}]}`. `config/opencode/`: snapshot config global sin secretos.
 - `config/git/`: reservado, sin tokens.
-- `modules/Common.ps1`: `Write-InstallLog` (ERROR→`$global:InstallHadErrors`), `Test-AppInstalled` (`winget list --exact`), `Install-WingetApp` (`--exact --silent` + verificación, único con `ShouldProcess`).
+- `modules/Common.ps1`: `Write-InstallLog` (ERROR→`$global:InstallHadErrors`), `Test-AppInstalled` (`winget list --exact`), `Install-WingetApp` (`--exact --silent` + verificación, único con `ShouldProcess`; exit != 0 con la app presente → WARNING).
 - `modules/Install-Category.ps1`: expande `All`, sin doble `ShouldProcess`.
 - `modules/Config-Git.ps1`: omite si no hay `git`; en `-WhatIf` sin datos no pregunta; valida email regex; aplica `main` + alias `tree`.
 - `modules/Config-VSCode.ps1`: instala ausentes con `code --install-extension --force`.
-- `modules/Config-OpenCode.ps1`: instalador oficial (2 intentos) + fusión conserva-con-aviso, omite secretos.
+- `modules/Config-OpenCode.ps1`: instalador oficial (2 intentos) + fusión conserva-con-aviso, omite secretos (nombre o asignación `clave: valor`, no la palabra suelta).
 - `modules/Config-Brave.ps1`: asegura Brave vía winget + extensiones idempotentes con aviso de reinicio.
-- `tests/Runner-Mock.ps1`: suite sin dependencias (159 checks, todo mockeado). `tests/*.Tests.ps1`: Pester 5+ (59 tests).
-- `docs/constitution.md`: ley del proyecto (P2 con excepción RF-17). `specs/001-instalador-win11/{spec,plan,tasks}.md` + `specs/002-opencode-brave-v2/{spec,plan,tasks}.md`: contratos SDD. `docs/estructura-proyecto.md`: mapa carpetas.
+- `tests/Runner-Mock.ps1`: suite sin dependencias (205 checks, todo mockeado). `tests/*.Tests.ps1`: Pester 5+ (72 tests).
+- `docs/constitution.md`: ley del proyecto (P2 con excepción RF-17). `specs/001-instalador-win11/{spec,plan,tasks}.md` + `specs/002-opencode-brave-v2/{spec,plan,tasks}.md` + `specs/003-auditoria-hardening/{spec,plan,tasks}.md`: contratos SDD. `docs/estructura-proyecto.md`: mapa carpetas.
 
 ## Convenciones para IA
 

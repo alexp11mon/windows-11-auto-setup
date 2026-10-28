@@ -1,6 +1,6 @@
 # Estructura del Proyecto - Instalador Automático Windows 11
 
-Documento breve para saber qué va en cada carpeta y archivo. Proyecto v1: Windows 11 64-bit solamente, solo winget, instalación idempotente y re-ejecutable. V2 (spec 002): OpenCode vía instalador oficial (excepción a solo-winget) + extensiones de Brave.
+Documento breve para saber qué va en cada carpeta y archivo. Proyecto v1: Windows 11 64-bit solamente, solo winget, instalación idempotente y re-ejecutable. V2 (spec 002): OpenCode vía instalador oficial (excepción a solo-winget) + extensiones de Brave. Spec 003: correcciones de la auditoría (elevación, logs persistentes, `-Sha256`, `-Apps`).
 
 ## Árbol actual
 
@@ -11,7 +11,7 @@ Instalador/
 │   ├── git/
 │   ├── vscode/
 │   │   └── extensions.json
-│   ├── opencode/          # snapshot config global (agents, skills, plugins, opencode.jsonc)
+│   ├── opencode/          # snapshot config global (agents, skills, opencode.jsonc)
 │   └── brave/
 │       └── extensions.json
 ├── modules/
@@ -63,7 +63,7 @@ Reservado para futura configuración de Git por fichero (nombre, email y valores
 Configuración de VSCode: `extensions.json` con la lista de extensiones a instalar.
 
 ### `config/opencode/`
-Copia versionada de la configuración global de OpenCode: `agents/`, `skills/`, `plugins/` y `opencode.jsonc`. Sin secretos, tokens ni datos personales (verificado con grep en tests). Se excluyen artefactos npm (`node_modules/`, `package.json`, locks).
+Copia versionada de la configuración global de OpenCode: `agents/`, `skills/` y `opencode.jsonc` (`plugins/` se admite, hoy vacío: `gk-hooks.js` se retiró en spec 003 por llevar una ruta personal y GitKraken lo regenera). Sin secretos, tokens, datos personales ni rutas absolutas (verificado en tests). Se excluyen artefactos npm (`node_modules/`, `package.json`, locks).
 
 ### `config/brave/`
 Catálogo de extensiones de Brave: `extensions.json` con objetos `{id, name}` (IDs de 32 caracteres de Chrome Web Store).
@@ -71,18 +71,18 @@ Catálogo de extensiones de Brave: `extensions.json` con objetos `{id, name}` (I
 ### `modules/`
 Funciones PowerShell:
 
-- `Common.ps1`: log fechado por ejecución, chequeo idempotente vía `winget list --exact`, instalación con soporte `-WhatIf` y verificación por `$LASTEXITCODE`. Los `ERROR` marcan `$global:InstallHadErrors` para el `exit 1` final.
+- `Common.ps1`: log fechado por ejecución, chequeo idempotente vía `winget list --exact`, instalación con soporte `-WhatIf` y verificación por `$LASTEXITCODE` (código distinto de 0 con la app instalada → WARNING, no ERROR). Los `ERROR` marcan `$global:InstallHadErrors` para el `exit 1` final.
 - `Install-Category.ps1`: `Invoke-InstallCategory -Category -AppsConfigPath`; expande `All` a `Base, Dev, Gaming` y delega en `Install-WingetApp` (sin doble `ShouldProcess`).
-- `Config-Git.ps1`: `Invoke-GitConfig -UserName -UserEmail`; en `-WhatIf` sin datos no pregunta (no bloquea), si no pide nombre/email, valida formato y aplica `user.name`, `user.email`, `init.defaultBranch=main` y alias `tree`.
+- `Config-Git.ps1`: `Invoke-GitConfig -UserName -UserEmail`; en `-WhatIf` sin datos no pregunta (no bloquea), si no pide nombre/email, valida formato y aplica `user.name`, `user.email`, `init.defaultBranch=main` y alias `tree` comprobando cada uno (ERROR con el nombre del ajuste que falle).
 - `Config-VSCode.ps1`: `Invoke-VSCodeConfig -ExtensionsConfigPath`; instala extensiones ausentes con `code --install-extension` y verifica el resultado.
-- `Config-OpenCode.ps1`: `Invoke-OpenCodeConfig -ConfigSourcePath [-DestinationRoot]`; instala con el instalador oficial si falta (2 intentos, verificado con `--version`) y fusiona el snapshot sin borrar nada del usuario (distinto → conservar con aviso; secretos → omitir con aviso).
-- `Config-Brave.ps1`: `Invoke-BraveConfig -ExtensionsConfigPath [-PolicyRoot]`; asegura Brave vía winget y aplica las extensiones de forma idempotente con aviso de reinicio.
+- `Config-OpenCode.ps1`: `Invoke-OpenCodeConfig -ConfigSourcePath [-DestinationRoot]`; instala con el instalador oficial si falta (2 intentos, verificado con `--version`) y fusiona el snapshot sin borrar nada del usuario (distinto → conservar con aviso; secretos por nombre o asignación `clave: valor` → omitir con aviso).
+- `Config-Brave.ps1`: `Invoke-BraveConfig -ExtensionsConfigPath [-PolicyRoot]`; asegura Brave vía winget y aplica las extensiones como política de equipo de forma idempotente (una sola lectura de la política) con aviso de reinicio.
 
 ### `tests/`
-Suite mockeada sin dependencias (`Runner-Mock.ps1`, 159 checks: sintaxis, JSON, winget/Git/VSCode/OpenCode/Brave con mocks, guards del entry, bootstrap y menú) + tests Pester 5+ por módulo (`Common`, `Install-Category`, `Config-Git`, `Config-VSCode`, `Config-OpenCode`, `Config-Brave`, `Install.Entry`, `Bootstrap.Entry`; 59 tests). No instalan nada: el registro solo se toca en clave HKCU temporal con limpieza. Requieren Pester 5+ solo para los `*.Tests.ps1`.
+Suite mockeada sin dependencias (`Runner-Mock.ps1`, 205 checks: sintaxis, JSON, winget/Git/VSCode/OpenCode/Brave con mocks, guards del entry, bootstrap, menú, comando de elevación real con hijo falso y AST de `Start-Process`) + tests Pester 5+ por módulo (`Common`, `Install-Category`, `Config-Git`, `Config-VSCode`, `Config-OpenCode`, `Config-Brave`, `Install.Entry`, `Bootstrap.Entry`; 72 tests). No instalan nada: el registro solo se toca en clave HKCU temporal con limpieza. Requieren Pester 5+ solo para los `*.Tests.ps1`.
 
 ### `logs/`
-Un `.log` fechado por ejecución (`install-YYYYMMDD-HHmmss.log`). Qué fue instalado y qué falló. Los `*.log` están ignorados por git; la carpeta se conserva con `.gitkeep`.
+Un `.log` fechado por ejecución (`install-YYYYMMDD-HHmmss.log`). Qué fue instalado y qué falló. En línea, `bootstrap.ps1` lo copia a `%LOCALAPPDATA%\win11-setup\logs` antes de borrar el temporal. Los `*.log` están ignorados por git; la carpeta se conserva con `.gitkeep`.
 
 ### `docs/`
 Notas del proyecto. `constitution.md` es la ley SDD (manda sobre spec/plan/tasks/código). Incluye este archivo.

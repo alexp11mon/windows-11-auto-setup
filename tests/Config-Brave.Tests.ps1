@@ -27,6 +27,27 @@ Describe 'Config-Brave' {
         $values.Count | Should -Be 5
         Should -Invoke Write-InstallLog -ParameterFilter { $Message -match 'already enforced' }
     }
+    It 'Lee las politicas una sola vez y no repite slots (RF-40)' {
+        $root = Join-Path $script:ScratchRoot 'read-once'
+        New-Item -Path $root -Force | Out-Null
+        New-ItemProperty -Path $root -Name '2' -Value 'otherextensionaaaaaaaaaaaaaaaaaa;https://example.invalid' -Force | Out-Null
+        # The mock rebuilds the real values via Get-Item (calling Get-ItemProperty here would recurse into the mock).
+        Mock Get-ItemProperty {
+            $key = Get-Item -LiteralPath $Path -ErrorAction SilentlyContinue
+            $values = [ordered]@{}
+            if ($key) { foreach ($n in $key.GetValueNames()) { $values[$n] = $key.GetValue($n) } }
+            [pscustomobject]$values
+        }
+        Invoke-BraveConfig -ExtensionsConfigPath $script:BraveExtPath -PolicyRoot $root
+        Should -Invoke Get-ItemProperty -Times 1 -Exactly
+        $names = @((Get-Item -LiteralPath $root).GetValueNames() | Where-Object { $_ -match '^\d+$' })
+        $names.Count | Should -Be 6
+        @($names | Sort-Object -Unique).Count | Should -Be 6
+    }
+    It 'Avisa de que las extensiones se fuerzan por politica (RF-42)' {
+        Invoke-BraveConfig -ExtensionsConfigPath $script:BraveExtPath -PolicyRoot (Join-Path $script:ScratchRoot 'policy-msg')
+        Should -Invoke Write-InstallLog -ParameterFilter { $Message -match 'machine policy' }
+    }
     It 'Brave ausente lo instala primero y luego aplica' {
         $global:MockBraveInstalled = $false
         Mock Test-AppInstalled { $global:MockBraveInstalled }

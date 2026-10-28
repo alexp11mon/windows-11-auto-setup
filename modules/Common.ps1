@@ -95,7 +95,12 @@ function Install-WingetApp {
         $wingetExit = $LASTEXITCODE
 
         if ($wingetExit -ne 0) {
-            Write-InstallLog -Message "winget returned exit code $wingetExit while installing: $AppName ($AppId). Check the console output." -Level "ERROR"
+            # Some non-zero codes (already installed from another source, reboot pending) still leave the app installed.
+            if (Test-AppInstalled -AppId $AppId) {
+                Write-InstallLog -Message "winget returned exit code $wingetExit for $AppName ($AppId), but the app is installed. Continuing." -Level "WARNING"
+            } else {
+                Write-InstallLog -Message "winget returned exit code $wingetExit while installing: $AppName ($AppId). Check the console output." -Level "ERROR"
+            }
             return
         }
 

@@ -74,6 +74,31 @@ Describe 'Config-OpenCode' {
         Test-Path (Join-Path $dest 'good.md') | Should -Be $true
         Should -Invoke Write-InstallLog -ParameterFilter { $Level -eq 'WARNING' -and $Message -match 'secret' }
     }
+    It 'Texto libre con "token" se aplica; asignaciones se omiten (RF-34)' {
+        Mock Get-Command { @{ Name = 'opencode' } } -ParameterFilter { $Name -eq 'opencode' }
+        function opencode { $global:LASTEXITCODE = 0 }
+        Mock Write-InstallLog { }
+        $src = Join-Path $TestDrive 'src-prose'
+        New-Item -ItemType Directory -Path $src -Force | Out-Null
+        Set-Content -Path (Join-Path $src 'prose.md') -Value 'Uses a token to log in.' -Encoding UTF8
+        Set-Content -Path (Join-Path $src 'assign.md') -Value 'token: abc12345' -Encoding UTF8
+        $dest = Join-Path $TestDrive 'opencode-prose'
+        Invoke-OpenCodeConfig -ConfigSourcePath $src -DestinationRoot $dest
+        Test-Path (Join-Path $dest 'prose.md') | Should -BeTrue
+        Test-Path (Join-Path $dest 'assign.md') | Should -BeFalse
+    }
+    It 'opencode.jsonc con comentarios se aplica (RF-35)' {
+        Mock Get-Command { @{ Name = 'opencode' } } -ParameterFilter { $Name -eq 'opencode' }
+        function opencode { $global:LASTEXITCODE = 0 }
+        Mock Write-InstallLog { }
+        $src = Join-Path $TestDrive 'src-jsonc'
+        New-Item -ItemType Directory -Path $src -Force | Out-Null
+        Set-Content -Path (Join-Path $src 'opencode.jsonc') -Value "{`n // c`n ""model"": ""x"" /* b */`n}" -Encoding UTF8
+        $dest = Join-Path $TestDrive 'opencode-jsonc'
+        Invoke-OpenCodeConfig -ConfigSourcePath $src -DestinationRoot $dest
+        Test-Path (Join-Path $dest 'opencode.jsonc') | Should -BeTrue
+        Should -Invoke Write-InstallLog -Times 0 -ParameterFilter { $Level -eq 'ERROR' }
+    }
     It '-WhatIf no descarga ni copia' {
         Mock Get-Command { $null } -ParameterFilter { $Name -eq 'opencode' }
         Mock Invoke-WebRequest { throw 'no debe descargar en WhatIf' }

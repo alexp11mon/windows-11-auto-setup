@@ -48,4 +48,12 @@ Describe 'install.ps1 entry guards' {
     It 'Propaga errores con InstallHadErrors y exit 1' {
         $script:Entry | Should -Match 'InstallHadErrors'
     }
+    It 'Modulo Config-* ausente loguea ERROR (RF-38)' {
+        $lines = @([regex]::Matches($script:Entry, 'configuration module not found at:[^\r\n]*') | ForEach-Object { $_.Value })
+        $lines.Count | Should -Be 4
+        $lines | ForEach-Object { $_ | Should -Match '-Level "ERROR"' }
+    }
+    It 'Update-SessionPath deduplica con HashSet sin distinguir mayusculas (RF-41)' {
+        $script:Entry | Should -Match 'HashSet\[string\]\]::new\(\[StringComparer\]::OrdinalIgnoreCase\)'
+    }
 }

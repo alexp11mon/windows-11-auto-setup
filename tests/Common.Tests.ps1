@@ -3,6 +3,11 @@
 BeforeAll {
     $RepoRoot = Split-Path -Parent $PSScriptRoot
     . (Join-Path $RepoRoot 'modules/Common.ps1')
+    # Pester can only Mock commands that exist: stub winget for sessions without it on PATH.
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { function global:winget { } }
+}
+AfterAll {
+    Remove-Item function:\winget -ErrorAction SilentlyContinue
 }
 Describe 'Common.ps1' {
     Context 'Initialize-InstallLog' {
@@ -38,6 +43,22 @@ Describe 'Common.ps1' {
             Mock Test-AppInstalled { $false }
             Mock winget { throw 'no deberia llamarse en WhatIf' } -ParameterFilter { ($args -join ' ') -match 'install' }
             Install-WingetApp -AppId 'Valve.Steam' -AppName 'Steam' -WhatIf
+        }
+        It 'winget !=0 con la app instalada loguea WARNING, no ERROR (RF-36)' {
+            $global:MockSteamInstalled = $false
+            Mock Test-AppInstalled { $global:MockSteamInstalled }
+            Mock winget { $global:MockSteamInstalled = $true; $global:LASTEXITCODE = -1978335189 }
+            Mock Write-InstallLog { }
+            Install-WingetApp -AppId 'Valve.Steam' -AppName 'Steam'
+            Should -Invoke Write-InstallLog -ParameterFilter { $Level -eq 'WARNING' -and $Message -match 'but the app is installed' }
+            Should -Invoke Write-InstallLog -Times 0 -ParameterFilter { $Level -eq 'ERROR' }
+        }
+        It 'winget !=0 con la app ausente loguea ERROR (RF-36)' {
+            Mock Test-AppInstalled { $false }
+            Mock winget { $global:LASTEXITCODE = 1 }
+            Mock Write-InstallLog { }
+            Install-WingetApp -AppId 'Valve.Steam' -AppName 'Steam'
+            Should -Invoke Write-InstallLog -ParameterFilter { $Level -eq 'ERROR' -and $Message -match 'exit code 1' }
         }
     }
 }

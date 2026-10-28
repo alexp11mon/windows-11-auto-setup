@@ -35,23 +35,19 @@ function Invoke-GitConfig {
     if ($PSCmdlet.ShouldProcess("Global Git configuration", "Apply identity and alias for $UserName")) {
         Write-InstallLog -Message "Applying base Git configuration for $UserName..." -Level "INFO"
 
-        # Quote the name (it may contain spaces). Native commands do not
-        # throw: check $LASTEXITCODE after each one.
-        git config --global user.name "$UserName"
-        if ($LASTEXITCODE -ne 0) {
-            Write-InstallLog -Message "Failed to set Git user.name (exit code $LASTEXITCODE)." -Level "ERROR"
-            return
+        # Native commands do not throw: check $LASTEXITCODE after each one.
+        $settings = [ordered]@{
+            'user.name'          = $UserName
+            'user.email'         = $UserEmail
+            'init.defaultBranch' = 'main'
+            'alias.tree'         = 'log --graph --decorate --all --oneline'
         }
-        git config --global user.email "$UserEmail"
-        if ($LASTEXITCODE -ne 0) {
-            Write-InstallLog -Message "Failed to set Git user.email (exit code $LASTEXITCODE)." -Level "ERROR"
-            return
-        }
-        git config --global init.defaultBranch "main"
-        git config --global alias.tree "log --graph --decorate --all --oneline"
-        if ($LASTEXITCODE -ne 0) {
-            Write-InstallLog -Message "Failed to set Git defaults/alias (exit code $LASTEXITCODE)." -Level "ERROR"
-            return
+        foreach ($key in $settings.Keys) {
+            git config --global $key $settings[$key]
+            if ($LASTEXITCODE -ne 0) {
+                Write-InstallLog -Message "Failed to set Git $key (exit code $LASTEXITCODE)." -Level "ERROR"
+                return
+            }
         }
 
         Write-InstallLog -Message "Git configuration applied successfully. Alias 'tree' created." -Level "INFO"

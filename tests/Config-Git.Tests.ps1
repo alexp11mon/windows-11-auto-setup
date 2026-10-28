@@ -24,6 +24,14 @@ Describe 'Config-Git' {
         Invoke-GitConfig -UserName 'Test User' -UserEmail 'test@example.com'
         Should -Invoke git -Times 4 -Exactly
     }
+    It 'Fallo en init.defaultBranch loguea ERROR con su nombre y no sigue (RF-39)' {
+        Mock Get-Command { @{ Name = 'git' } } -ParameterFilter { $Name -eq 'git' }
+        Mock git { $global:LASTEXITCODE = if (($args -join ' ') -match 'init\.defaultBranch') { 5 } else { 0 } }
+        Mock Write-InstallLog { }
+        Invoke-GitConfig -UserName 'Test User' -UserEmail 'test@example.com'
+        Should -Invoke Write-InstallLog -ParameterFilter { $Level -eq 'ERROR' -and $Message -match 'init\.defaultBranch' }
+        Should -Invoke git -Times 3 -Exactly
+    }
     It '-WhatIf no ejecuta git' {
         Mock Get-Command { @{ Name = 'git' } } -ParameterFilter { $Name -eq 'git' }
         Mock git { throw 'no debe ejecutarse en WhatIf' }

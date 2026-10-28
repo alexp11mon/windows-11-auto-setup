@@ -90,7 +90,8 @@ function Invoke-OpenCodeConfig {
             $destPath = Join-Path -Path $DestinationRoot -ChildPath $relative
 
             $content = Get-Content -Path $file.FullName -Raw -Encoding UTF8
-            if (($relative -match 'token|password|secret|api[_-]?key') -or ($content -match 'token|password|secret|api[_-]?key')) {
+            # Content: only "key = value" / "key": "value" assignments, so prose that mentions "token" still applies.
+            if (($relative -match 'token|password|secret|api[_-]?key') -or ($content -match '(?i)(token|password|secret|api[_-]?key)["'']?\s*[:=]\s*["'']?[^\s"'']{4,}')) {
                 Write-InstallLog -Message "Skipping '$relative': possible secret detected." -Level "WARNING"
                 continue
             }

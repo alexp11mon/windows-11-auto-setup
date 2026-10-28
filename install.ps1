@@ -32,15 +32,13 @@ function Update-SessionPath {
         $machine = [Environment]::GetEnvironmentVariable("Path", "Machine")
         $user = [Environment]::GetEnvironmentVariable("Path", "User")
         $current = $env:Path
-        $combined = @()
+        $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        $combined = [System.Collections.Generic.List[string]]::new()
         foreach ($part in @($current, $machine, $user)) {
             if ([string]::IsNullOrWhiteSpace($part)) { continue }
             foreach ($entry in ($part -split ';')) {
                 $trimmed = $entry.Trim()
-                if ([string]::IsNullOrWhiteSpace($trimmed)) { continue }
-                if ($combined -inotcontains $trimmed) {
-                    $combined += $trimmed
-                }
+                if ($trimmed -and $seen.Add($trimmed)) { $combined.Add($trimmed) }
             }
         }
         if ($combined.Count -gt 0) {
@@ -125,7 +123,7 @@ if (Test-Path $GitModulePath) {
         }
     }
 } else {
-    Write-InstallLog -Message "Git configuration module not found at: $GitModulePath" -Level "WARNING"
+    Write-InstallLog -Message "Git configuration module not found at: $GitModulePath" -Level "ERROR"
 }
 
 # 9. VSCode configuration (Dev or All only)
@@ -141,7 +139,7 @@ if (Test-Path $VSCodeModulePath) {
         }
     }
 } else {
-    Write-InstallLog -Message "VSCode configuration module not found at: $VSCodeModulePath" -Level "WARNING"
+    Write-InstallLog -Message "VSCode configuration module not found at: $VSCodeModulePath" -Level "ERROR"
 }
 
 # 10. OpenCode configuration (Dev or All only)
@@ -157,7 +155,7 @@ if (Test-Path $OpenCodeModulePath) {
         }
     }
 } else {
-    Write-InstallLog -Message "OpenCode configuration module not found at: $OpenCodeModulePath" -Level "WARNING"
+    Write-InstallLog -Message "OpenCode configuration module not found at: $OpenCodeModulePath" -Level "ERROR"
 }
 
 # 11. Brave configuration (Base or All only)
@@ -173,7 +171,7 @@ if (Test-Path $BraveModulePath) {
         }
     }
 } else {
-    Write-InstallLog -Message "Brave configuration module not found at: $BraveModulePath" -Level "WARNING"
+    Write-InstallLog -Message "Brave configuration module not found at: $BraveModulePath" -Level "ERROR"
 }
 
 # 12. Exit
